@@ -1,0 +1,15 @@
+[project]
+name = "ex1-psychology-session-analyzer"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "MatanRN", email = "matan.rn@outlook.com"},
+]
+dependencies = []
+requires-python = "==3.13.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false
