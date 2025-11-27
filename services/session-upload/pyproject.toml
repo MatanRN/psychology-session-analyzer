@@ -1,11 +1,11 @@
 [project]
-name = "ex1-psychology-session-analyzer"
+name = "session-upload"
 version = "0.1.0"
 description = "Default template for PDM package"
 authors = [
     {name = "MatanRN", email = "matan.rn@outlook.com"},
 ]
-dependencies = []
+dependencies = ["fastapi[standard]>=0.122.0", "minio>=7.2.20"]
 requires-python = "==3.13.*"
 readme = "README.md"
 license = {text = "MIT"}
@@ -13,6 +13,3 @@ license = {text = "MIT"}
 
 [tool.pdm]
 distribution = false
-
-[tool.pdm.workspace]
-packages = ["services/*"] 

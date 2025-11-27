@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Session Upload",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "main:app",
+                "--reload",
+                "--port", "8000"
+            ],
+            "envFile": "${workspaceFolder}/../../.env",
+            "jinja": true,
+            "justMyCode": true
+        }
+    ]
+}
