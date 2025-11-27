@@ -22,7 +22,7 @@ services:
       - MINIO_USER=${MINIO_USER}
       - MINIO_PASSWORD=${MINIO_PASSWORD}
     volumes:
-      - ./minio_data:/data
+      - minio_data:/data
     networks:
       - analyzer-network
   redis:
@@ -32,7 +32,7 @@ services:
       - 6379:6379 # Redis port
       - 8001:8001 # RedisInsight port
     volumes:
-      - ./redis_data:/data
+      - redis_data:/data
     networks:
       - analyzer-network
   datadog:
