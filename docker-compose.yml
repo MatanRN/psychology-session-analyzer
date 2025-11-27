@@ -8,10 +8,21 @@ services:
       - MINIO_USER=${MINIO_USER}
       - MINIO_PASSWORD=${MINIO_PASSWORD}
       - MINIO_ENDPOINT=minio:9000
+      - RABBITMQ_HOST=rabbitmq:5672
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - DD_AGENT_HOST=datadog       # Send traces to the agent container
+      - DD_SERVICE=session-upload   # Name of service in DD Dashboard
+      - DD_LOGS_INJECTION=true
     ports:
       - 8000:8000
     networks:
       - analyzer-network
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "python", "service": "session-upload"}]'
+    depends_on:
+      - rabbitmq
+      - minio
   rabbitmq:
     image: rabbitmq:4.2.1-management-alpine
     container_name: rabbitmq
@@ -53,18 +64,25 @@ services:
     container_name: datadog
     environment:
       - DD_API_KEY=${DD_API_KEY}
+      - DD_APM_ENABLED=true
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      - DD_LOGS_CONFIG_DOCKER_CONTAINER_USE_FILE=true
+      - DD_CONTAINER_EXCLUDE=image:datadog/agent:* # to exclude datadog agent from logs collection
       - DD_SITE=datadoghq.eu
       - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /proc/:/host/proc/:ro
-      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro # to collect logs from docker
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro #to collect logs from files
+      - datadog-run-socket:/opt/datadog-agent/run:rw #to prevent logs from being lost during restarts
     networks:
       - analyzer-network
+    labels:
+      com.datadoghq.ad.logs: '["<LOGS_CONFIG>"]'
 volumes:
   minio_data:
   redis_data:
+  datadog-run-socket:
 networks:
   analyzer-network:
     driver: bridge
