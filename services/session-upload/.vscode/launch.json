@@ -13,6 +13,9 @@
                 "--port", "8000"
             ],
             "envFile": "${workspaceFolder}/../../.env",
+            "env": {
+                "MINIO_ENDPOINT": "localhost:9000"
+            },
             "jinja": true,
             "justMyCode": true
         }
