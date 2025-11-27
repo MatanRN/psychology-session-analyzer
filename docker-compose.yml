@@ -1,0 +1,58 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.2.1-management-alpine
+    container_name: rabbitmq
+    hostname: rabbitmq
+    ports:
+      - 5672:5672 # AMQP port (used by the services)
+      - 15672:15672 # Dashboard port
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    networks:
+      - analyzer-network
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    ports:
+      - 9000:9000 # API port
+      - 9001:9001 # Console port
+    environment:
+      - MINIO_USER=${MINIO_USER}
+      - MINIO_PASSWORD=${MINIO_PASSWORD}
+    volumes:
+      - ./minio_data:/data
+    networks:
+      - analyzer-network
+  redis:
+    image: redis/redis-stack:latest
+    container_name: redis
+    ports:
+      - 6379:6379 # Redis port
+      - 8001:8001 # RedisInsight port
+    volumes:
+      - ./redis_data:/data
+    networks:
+      - analyzer-network
+  datadog:
+    image: gcr.io/datadoghq/agent:7
+    container_name: datadog
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=datadoghq.eu
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks:
+      - analyzer-network
+volumes:
+  rabbitmq_data:
+  minio_data:
+  redis_data:
+networks:
+  analyzer-network:
+    driver: bridge
