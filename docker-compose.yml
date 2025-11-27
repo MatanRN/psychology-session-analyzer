@@ -1,4 +1,17 @@
 services:
+  session-upload:
+    build:
+      context: ./services/session-upload
+      dockerfile: Dockerfile
+    container_name: session-upload
+    environment:
+      - MINIO_USER=${MINIO_USER}
+      - MINIO_PASSWORD=${MINIO_PASSWORD}
+      - MINIO_ENDPOINT=minio:9000
+    ports:
+      - 8000:8000
+    networks:
+      - analyzer-network
   rabbitmq:
     image: rabbitmq:4.2.1-management-alpine
     container_name: rabbitmq
@@ -50,7 +63,6 @@ services:
     networks:
       - analyzer-network
 volumes:
-  rabbitmq_data:
   minio_data:
   redis_data:
 networks:
