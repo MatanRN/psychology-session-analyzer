@@ -4,20 +4,21 @@ Session Upload Service.
 This module provides a FastAPI application for uploading psychology session videos.
 It handles:
 - Storing video files in MinIO object storage.
-- Publishing 'session.uploaded' events to a RabbitMQ exchange.
+- Publishing 'video.upload.completed' events to a RabbitMQ exchange.
 - Distributed tracing with Datadog.
 - Structured JSON logging.
 """
 
-from fastapi import FastAPI, UploadFile
-from minio import Minio
-import os
-import logging
-from fastapi.exceptions import HTTPException
-import pika
 import json
+import logging
+import os
 import sys
+
+import pika
 from ddtrace import patch_all
+from fastapi import FastAPI, UploadFile
+from fastapi.exceptions import HTTPException
+from minio import Minio
 from pythonjsonlogger import jsonlogger
 
 patch_all()
@@ -95,7 +96,9 @@ def get_rabbit_channel():
     connection = pika.BlockingConnection(parameters)
     channel = connection.channel()
     # Ensure exchange exists (Idempotent - safe to call every time)
-    channel.exchange_declare(exchange=EXCHANGE_NAME, exchange_type="fanout")
+    channel.exchange_declare(
+        exchange=EXCHANGE_NAME, exchange_type="topic", durable=True
+    )
     return connection, channel
 
 
@@ -171,7 +174,7 @@ def upload_session(file: UploadFile):
         }
         channel.basic_publish(
             exchange=EXCHANGE_NAME,
-            routing_key="session.uploaded",
+            routing_key="video.upload.completed",
             body=json.dumps(event_data),
         )
         connection.close()
@@ -180,7 +183,7 @@ def upload_session(file: UploadFile):
             extra={
                 "file_name": file.filename,
                 "exchange": EXCHANGE_NAME,
-                "routing_key": "session.uploaded",
+                "routing_key": "video.upload.completed",
             },
         )
     except Exception as e:
