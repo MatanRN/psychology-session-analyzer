@@ -10,10 +10,13 @@ It handles:
 - Structured JSON logging.
 """
 
+import json
 import logging
 import os
 import sys
+import tempfile
 
+import moviepy
 import pika
 from ddtrace import patch_all
 from minio import Minio
@@ -78,7 +81,7 @@ def get_rabbit_channel():
     )
     connection = pika.BlockingConnection(parameters)
     channel = connection.channel()
-    # Ensure exchange exists - idempotent
+    # Ensure exchanges exists - idempotent
     channel.exchange_declare(
         exchange=EXCHANGE_NAME, exchange_type="topic", durable=True
     )
@@ -127,7 +130,72 @@ except Exception:
 
 
 def process_video(ch, method, properties, body):
-    pass
+    """
+    Processes a video file by extracting audio and storing it in MinIO.
+    """
+    data = json.loads(body)
+    file_name = data["file_name"]
+    bucket_name = data["bucket_name"]
+
+    try:
+        with minio_client.get_object(
+            bucket_name=bucket_name,
+            object_name=file_name,
+        ) as response:
+            data = response.data
+    except Exception:
+        logger.exception(
+            "MinIO Object Retrieval Failed",
+            extra={"file_name": file_name, "bucket_name": bucket_name},
+        )
+        ch.basic_nack(delivery_tag=method.delivery_tag)
+        return
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_file_path = os.path.join(temp_dir, file_name)
+            with open(temp_file_path, "wb") as f:
+                f.write(data)
+            logger.info(
+                "Video file saved to temporary directory",
+                extra={"file_name": file_name, "temp_file_path": temp_file_path},
+            )
+            video = moviepy.VideoFileClip(temp_file_path)
+            audio = video.audio
+            audio_file_path = temp_file_path.replace(".mp4", ".wav")
+            logger.info(
+                "Audio file saved to temporary directory",
+                extra={"audio_file_path": audio_file_path},
+            )
+            audio.write_audiofile(audio_file_path)
+            audio_file_name = audio_file_path.split("/")[-1]
+            logger.info(
+                "Audio file name",
+                extra={"audio_file_name": audio_file_name},
+            )
+            audio.close()
+            video.close()
+            with open(audio_file_path, "rb") as f:
+                audio_data = f.read()
+            minio_client.put_object(
+                bucket_name=bucket_name,
+                object_name=audio_file_name,
+                content_type="audio/wav",
+                length=len(audio_data),
+                data=audio_data,
+            )
+            logger.info(
+                "Audio file saved to MinIO",
+                extra={"audio_file_name": audio_file_name, "bucket_name": bucket_name},
+            )
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+        return
+    except Exception:
+        logger.exception(
+            "Video Processing Failed",
+            extra={"file_name": file_name, "bucket_name": bucket_name},
+        )
+        ch.basic_nack(delivery_tag=method.delivery_tag)
+        return
 
 
 def main():
