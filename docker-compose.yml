@@ -15,14 +15,42 @@ services:
       - DD_SERVICE=session-upload   # Name of service in DD Dashboard
       - DD_LOGS_INJECTION=true
     ports:
-      - 8000:8000
+      - 8000:8000 # FastAPI port
     networks:
       - analyzer-network
     labels:
       com.datadoghq.ad.logs: '[{"source": "python", "service": "session-upload"}]'
     depends_on:
-      - rabbitmq
-      - minio
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+  audio-extractor:
+    build:
+      context: ./services/audio-extractor
+      dockerfile: Dockerfile
+    container_name: audio-extractor
+    environment:
+      - MINIO_USER=${MINIO_USER}
+      - MINIO_PASSWORD=${MINIO_PASSWORD}
+      - MINIO_ENDPOINT=minio:9000
+      - RABBITMQ_HOST=rabbitmq:5672
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - DD_AGENT_HOST=datadog       # Send traces to the agent container
+      - DD_SERVICE=audio-extractor   # Name of service in DD Dashboard
+      - DD_LOGS_INJECTION=true
+    networks:
+      - analyzer-network
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "python", "service": "audio-extractor"}]'
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      session-upload:
+        condition: service_started
   rabbitmq:
     image: rabbitmq:4.2.1-management-alpine
     container_name: rabbitmq
@@ -33,6 +61,11 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - analyzer-network
   minio:
