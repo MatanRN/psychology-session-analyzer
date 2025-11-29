@@ -79,8 +79,29 @@ def get_rabbit_channel():
     parameters = pika.ConnectionParameters(
         host=host, port=port, credentials=credentials
     )
-    connection = pika.BlockingConnection(parameters)
-    channel = connection.channel()
+    try:
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+    except RuntimeError:
+        logger.exception(
+            "RabbitMQ Connection Failed, retrying...",
+            extra={"host": host, "port": port, "username": username},
+        )
+        raise
+    logger.info(
+        "RabbitMQ Connection Established",
+        extra={"host": host, "port": port, "username": username},
+    )
+    # Set up dead letter hanlding
+    channel.exchange_declare(
+        exchange="dead_letter_exchange", exchange_type="direct", durable=True
+    )
+    channel.queue_declare(queue="dead_letter_queue", durable=True)
+    channel.queue_bind(
+        queue="dead_letter_queue",
+        exchange="dead_letter_exchange",
+        routing_key="analysis.failed",
+    )
     # Ensure exchanges exists - idempotent
     channel.exchange_declare(
         exchange=EXCHANGE_NAME, exchange_type="topic", durable=True
@@ -88,10 +109,17 @@ def get_rabbit_channel():
     # Ensure queue exists - idempotent
     channel.queue_declare(queue="audio_extraction_queue", durable=True)
     # Bind queue to exchange with routing key - idempotent
+    args = {
+        "x-queue-type": "quorum",
+        "x-delivery-limit": 3,
+        "x-dead-letter-exchange": "dead_letter_exchange",
+        "x-dead-letter-routing-key": "analysis.failed",
+    }
     channel.queue_bind(
         queue="audio_extraction_queue",
         exchange=EXCHANGE_NAME,
         routing_key="video.upload.completed",
+        arguments=args,
     )
     return connection, channel
 
