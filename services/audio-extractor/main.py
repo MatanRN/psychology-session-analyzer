@@ -162,29 +162,27 @@ def process_video(ch, method, properties, body):
             video = moviepy.VideoFileClip(temp_file_path)
             audio = video.audio
             audio_file_path = temp_file_path.replace(".mp4", ".wav")
-            logger.info(
-                "Audio file saved to temporary directory",
-                extra={"audio_file_path": audio_file_path},
-            )
-            audio.write_audiofile(audio_file_path)
+            audio.write_audiofile(audio_file_path, logger=None)
             audio_file_name = audio_file_path.split("/")[-1]
             logger.info(
-                "Audio file name",
-                extra={"audio_file_name": audio_file_name},
+                "Audio file extracted and saved to temporary directory",
+                extra={
+                    "audio_file_name": audio_file_name,
+                    "audio_file_path": audio_file_path,
+                },
             )
             audio.close()
             video.close()
-            with open(audio_file_path, "rb") as f:
-                audio_data = f.read()
-            minio_client.put_object(
-                bucket_name=bucket_name,
-                object_name=audio_file_name,
-                content_type="audio/wav",
-                length=len(audio_data),
-                data=audio_data,
-            )
+            with open(audio_file_path, "rb") as audio_file:
+                minio_client.put_object(
+                    bucket_name=bucket_name,
+                    object_name=audio_file_name,
+                    content_type="audio/wav",
+                    length=os.path.getsize(audio_file_path),
+                    data=audio_file,
+                )
             logger.info(
-                "Audio file saved to MinIO",
+                "Audio file successfully saved to MinIO",
                 extra={"audio_file_name": audio_file_name, "bucket_name": bucket_name},
             )
         ch.basic_ack(delivery_tag=method.delivery_tag)
@@ -204,3 +202,7 @@ def main():
         queue="audio_extraction_queue", on_message_callback=process_video
     )
     channel.start_consuming()
+
+
+if __name__ == "__main__":
+    main()
