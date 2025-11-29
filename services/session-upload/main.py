@@ -104,23 +104,27 @@ def get_rabbit_channel():
 
 try:
     minio_client = Minio(
-        endpoint=os.getenv("MINIO_ENDPOINT"),
+        endpoint=os.getenv("MINIO_ENDPOINT", "minio:9000"),
         access_key=os.getenv("MINIO_USER"),
         secret_key=os.getenv("MINIO_PASSWORD"),
         secure=False,
     )
-    logger.info(f"Minio client initialized with user {os.getenv('MINIO_USER')}")
-except Exception as e:
-    logger.exception(
-        f"Error initializing Minio client. Ensure that the environment variables are set correctly and that the Minio service is running. {e}"
+    logger.info(
+        "Minio client initialized with user", extra={"user": os.getenv("MINIO_USER")}
     )
-    raise HTTPException(status_code=500, detail=str(e)) from e
-
-if not minio_client.bucket_exists(BUCKET_NAME):
-    minio_client.make_bucket(BUCKET_NAME)
-    logger.info(f"Bucket {BUCKET_NAME} created")
-else:
-    logger.info(f"Bucket {BUCKET_NAME} already exists")
+    if not minio_client.bucket_exists(BUCKET_NAME):
+        minio_client.make_bucket(BUCKET_NAME)
+        logger.info("Bucket created", extra={"bucket_name": BUCKET_NAME})
+    else:
+        logger.info("Bucket already exists", extra={"bucket_name": BUCKET_NAME})
+except Exception:
+    logger.exception(
+        "MinIO Client Initialization Failed",
+        extra={
+            "endpoint": os.getenv("MINIO_ENDPOINT", "minio:9000"),
+            "user": os.getenv("MINIO_USER"),
+        },
+    )
 
 
 @app.post("/upload")
@@ -162,9 +166,9 @@ def upload_session(file: UploadFile):
     except Exception as e:
         logger.exception(
             "MinIO Upload Failed",
-            extra={"file_name": file.filename, "error": str(e)},
+            extra={"file_name": file.filename},
         )
-        raise HTTPException(status_code=500, detail=f"Storage Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="File Upload Failed") from e
     try:
         connection, channel = get_rabbit_channel()
         event_data = {
@@ -189,7 +193,7 @@ def upload_session(file: UploadFile):
     except Exception as e:
         logger.exception(
             "RabbitMQ Publish Failed",
-            extra={"file_name": file.filename, "error": str(e)},
+            extra={"file_name": file.filename},
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="RabbitMQ Publish Failed") from e
     return {"message": "Session uploaded successfully, processing started"}
