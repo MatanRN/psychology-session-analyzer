@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"name": "Root",
+			"path": "."
+		},
+		{
+			"name": "Session Upload",
+			"path": "services/session-upload"
+		},
+		{
+			"name": "Audio Extractor",
+			"path": "services/audio-extractor"
+		}
+	],
+	"settings": {
+		"python.terminal.activateEnvironment": true
+	}
+}
