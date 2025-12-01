@@ -98,23 +98,33 @@ def transcribe_audio(
                 "Audio file saved to temporary directory",
                 extra={"file_name": file_name, "temp_file_path": temp_file_path},
             )
-        try:
-            transcription = transcriber.transcribe(temp_file_path)
-        except Exception:
-            logger.exception(
-                "Audio Transcription Failed",
-            )
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-            return
-        logger.info(
-            "Audio file successfully transcribed",
-        )
+            with open(temp_file_path, "rb") as audio_file:
+                try:
+                    transcription = transcriber.transcribe(audio_file)
+                    logger.info(
+                        "Audio transcription successful",
+                        extra={
+                            "file_name": file_name,
+                            "temp_file_path": temp_file_path,
+                        },
+                    )
+                except Exception:
+                    logger.exception(
+                        "Audio transcription failed",
+                        extra={
+                            "file_name": file_name,
+                            "temp_file_path": temp_file_path,
+                        },
+                    )
+                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+                    return
+
         transcription_file_name = file_name.split(".")[0] + ".txt"
         transcription_file_path = os.path.join(temp_dir, transcription_file_name)
         with tempfile.TemporaryDirectory() as temp_dir:
             transcription_file_path = os.path.join(temp_dir, transcription_file_name)
             with open(transcription_file_path, "w") as f:
-                f.write(transcription.text.encode("utf-8"))
+                f.write(transcription.text)
             logger.info(
                 "Transcription saved to temporary directory",
                 extra={
