@@ -1,0 +1,23 @@
+[project]
+name = "psychology-common"
+version = "0.1.0"
+description = "Shared utility functions for Psychology Session Analyzer services"
+authors = [
+    {name = "MatanRN", email = "matan.rn@outlook.com"},
+]
+dependencies = [
+    "python-json-logger>=4.0.0",
+    "pika>=1.3.2",
+    "minio>=7.2.20",
+]
+requires-python = "==3.13.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = true
+
