@@ -96,11 +96,11 @@ def get_rabbit_channel():
     channel.exchange_declare(
         exchange="dead_letter_exchange", exchange_type="direct", durable=True
     )
-    channel.queue_declare(queue="dead_letter_queue", durable=True)
+    channel.queue_declare(queue="dlq_audio_extraction", durable=True)
     channel.queue_bind(
-        queue="dead_letter_queue",
+        queue="dlq_audio_extraction",
         exchange="dead_letter_exchange",
-        routing_key="analysis.failed",
+        routing_key="audio.extraction.failed",
     )
     # Ensure exchanges exists - idempotent
     channel.exchange_declare(
@@ -113,7 +113,7 @@ def get_rabbit_channel():
         "x-queue-type": "quorum",
         "x-delivery-limit": MAX_DELIVERY_COUNT,
         "x-dead-letter-exchange": "dead_letter_exchange",
-        "x-dead-letter-routing-key": "analysis.failed",
+        "x-dead-letter-routing-key": "audio.extraction.failed",
     }
     channel.queue_bind(
         queue="audio_extraction_queue",
@@ -223,6 +223,24 @@ def process_video(ch, method, properties, body):
                 extra={"file_name": audio_file_name, "bucket_name": BUCKET_NAME},
             )
         ch.basic_ack(delivery_tag=method.delivery_tag)
+        # event_data = {
+        #     "file_name": audio_file_name,
+        #     "bucket_name": bucket_name,
+        #     "content_type": "audio/wav",
+        # }
+        # ch.basic_publish(
+        #     exchange=EXCHANGE_NAME,
+        #     routing_key="audio.extraction.completed",
+        #     body=json.dumps(event_data),
+        # )
+        # logger.info(
+        #     "Event published to RabbitMQ",
+        #     extra={
+        #         "file_name": file_name,
+        #         "exchange": EXCHANGE_NAME,
+        #         "routing_key": "audio.extraction.completed",
+        #     },
+        # )
         return
     except Exception:
         logger.exception(
