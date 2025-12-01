@@ -111,7 +111,7 @@ def get_rabbit_channel():
     # Bind queue to exchange with routing key - idempotent
     args = {
         "x-queue-type": "quorum",
-        "x-delivery-limit": 3,
+        "x-delivery-limit": MAX_DELIVERY_COUNT,
         "x-dead-letter-exchange": "dead_letter_exchange",
         "x-dead-letter-routing-key": "analysis.failed",
     }
@@ -136,6 +136,7 @@ RABBITMQ_USER = os.getenv("RABBITMQ_USER")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
 BUCKET_NAME = "audio-files"
 EXCHANGE_NAME = "events"
+MAX_DELIVERY_COUNT = 3
 
 try:
     minio_client = Minio(
@@ -161,6 +162,14 @@ def process_video(ch, method, properties, body):
     """
     Processes a video file by extracting audio and storing it in MinIO.
     """
+    delivery_count = 1
+    if properties.headers and "x-delivery-count" in properties.headers:
+        delivery_count = properties.headers["x-delivery-count"]
+    logger.info(
+        "Processing video (Attempt %s/%s)",
+        delivery_count,
+        MAX_DELIVERY_COUNT,
+    )
     data = json.loads(body)
     file_name = data["file_name"]
     bucket_name = data["bucket_name"]
@@ -203,7 +212,7 @@ def process_video(ch, method, properties, body):
             video.close()
             with open(audio_file_path, "rb") as audio_file:
                 minio_client.put_object(
-                    bucket_name=bucket_name,
+                    bucket_name=BUCKET_NAME,
                     object_name=audio_file_name,
                     content_type="audio/wav",
                     length=os.path.getsize(audio_file_path),
@@ -211,13 +220,13 @@ def process_video(ch, method, properties, body):
                 )
             logger.info(
                 "Audio file successfully saved to MinIO",
-                extra={"audio_file_name": audio_file_name, "bucket_name": bucket_name},
+                extra={"file_name": audio_file_name, "bucket_name": BUCKET_NAME},
             )
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
     except Exception:
         logger.exception(
-            "Video Processing Failed",
+            "Audio Extraction Failed. Retrying...",
             extra={"file_name": file_name, "bucket_name": bucket_name},
         )
         ch.basic_nack(delivery_tag=method.delivery_tag)
