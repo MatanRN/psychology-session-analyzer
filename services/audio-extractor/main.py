@@ -139,32 +139,30 @@ def process_video(ch, method, properties, body):
                 extra={"file_name": audio_file_name, "bucket_name": BUCKET_NAME},
             )
         ch.basic_ack(delivery_tag=method.delivery_tag)
-        # event_data = {
-        #     "file_name": audio_file_name,
-        #     "bucket_name": bucket_name,
-        #     "content_type": "audio/wav",
-        # }
-        # ch.basic_publish(
-        #     exchange=EXCHANGE_NAME,
-        #     routing_key="audio.extraction.completed",
-        #     body=json.dumps(event_data),
-        # )
-        # logger.info(
-        #     "Event published to RabbitMQ",
-        #     extra={
-        #         "file_name": file_name,
-        #         "exchange": EXCHANGE_NAME,
-        #         "routing_key": "audio.extraction.completed",
-        #     },
-        # )
-        return
+        event_data = {
+            "file_name": audio_file_name,
+            "content_type": "audio/wav",
+            "bucket_name": BUCKET_NAME,
+        }
+        ch.basic_publish(
+            exchange=EXCHANGE_NAME,
+            routing_key="audio.extraction.completed",
+            body=json.dumps(event_data),
+        )
+        logger.info(
+            "Event published to RabbitMQ",
+            extra={
+                "file_name": file_name,
+                "exchange": EXCHANGE_NAME,
+                "routing_key": "audio.extraction.completed",
+            },
+        )
     except Exception:
         logger.exception(
             "Audio Extraction Failed. Retrying...",
             extra={"file_name": file_name, "bucket_name": bucket_name},
         )
         ch.basic_nack(delivery_tag=method.delivery_tag)
-        return
 
 
 def main():
