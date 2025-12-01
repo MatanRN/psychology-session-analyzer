@@ -10,58 +10,12 @@ It handles:
 """
 
 import json
-import logging
 import os
-import sys
 
-import pika
 from ddtrace import patch_all
 from fastapi import FastAPI, UploadFile
 from fastapi.exceptions import HTTPException
-from minio import Minio
-from pythonjsonlogger import jsonlogger
-
-patch_all()
-app = FastAPI()
-
-
-def setup_logging():
-    """
-    Configures and sets up structured JSON logging for the application.
-
-    This function initializes a JSON formatter that includes timestamp, level,
-    logger name, message, trace_id, and span_id. It replaces default handlers
-    for the root logger and Uvicorn loggers with a custom stream handler
-    to ensure consistent log formatting across the application.
-
-    Returns:
-        logging.Logger: The configured root logger instance.
-    """
-    formatter = jsonlogger.JsonFormatter(
-        "%(asctime)s %(levelname)s %(name)s %(message)s %(trace_id)s %(span_id)s"
-    )
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(formatter)
-
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    root_logger.handlers = []
-    root_logger.addHandler(stream_handler)
-
-    for logger_name in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
-        u_logger = logging.getLogger(logger_name)
-        u_logger.setLevel(logging.INFO)
-
-        u_logger.handlers = []
-
-        u_logger.addHandler(stream_handler)
-
-        u_logger.propagate = False
-
-    return root_logger
-
-
-logger = setup_logging()
+from psychology_common import get_minio_client, get_rabbit_channel, setup_logging
 
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
 MINIO_USER = os.getenv("MINIO_USER")
@@ -72,59 +26,21 @@ RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
 BUCKET_NAME = "session-videos"
 EXCHANGE_NAME = "events"
 
-
-def get_rabbit_channel():
-    """
-    Establishes a new blocking connection to RabbitMQ and returns a channel.
-
-    This function creates a fresh connection for each request to ensure thread safety
-    and avoid connection closure issues typical with long-lived connections in
-    threaded environments. It also ensures the target exchange exists.
-
-    Returns:
-        tuple: A tuple containing (connection, channel).
-            - connection (pika.BlockingConnection): The active RabbitMQ connection.
-            - channel (pika.channel.Channel): The active channel for publishing.
-    """
-    username = os.getenv("RABBITMQ_USER")
-    password = os.getenv("RABBITMQ_PASSWORD")
-    host, port = os.getenv("RABBITMQ_HOST").split(":")
-    credentials = pika.PlainCredentials(username, password)
-    parameters = pika.ConnectionParameters(
-        host=host, port=port, credentials=credentials
-    )
-    connection = pika.BlockingConnection(parameters)
-    channel = connection.channel()
-    # Ensure exchange exists (Idempotent - safe to call every time)
-    channel.exchange_declare(
-        exchange=EXCHANGE_NAME, exchange_type="topic", durable=True
-    )
-    return connection, channel
-
-
-try:
-    minio_client = Minio(
-        endpoint=os.getenv("MINIO_ENDPOINT", "minio:9000"),
-        access_key=os.getenv("MINIO_USER"),
-        secret_key=os.getenv("MINIO_PASSWORD"),
-        secure=False,
-    )
-    logger.info(
-        "Minio client initialized with user", extra={"user": os.getenv("MINIO_USER")}
-    )
-    if not minio_client.bucket_exists(BUCKET_NAME):
-        minio_client.make_bucket(BUCKET_NAME)
-        logger.info("Bucket created", extra={"bucket_name": BUCKET_NAME})
-    else:
-        logger.info("Bucket already exists", extra={"bucket_name": BUCKET_NAME})
-except Exception:
-    logger.exception(
-        "MinIO Client Initialization Failed",
-        extra={
-            "endpoint": os.getenv("MINIO_ENDPOINT", "minio:9000"),
-            "user": os.getenv("MINIO_USER"),
-        },
-    )
+logger = setup_logging()
+patch_all()
+app = FastAPI()
+rabbit_connection, rabbit_channel = get_rabbit_channel(
+    RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_HOST
+)
+rabbit_channel.exchange_declare(
+    exchange=EXCHANGE_NAME, exchange_type="topic", durable=True
+)
+minio_client = get_minio_client(MINIO_ENDPOINT, MINIO_USER, MINIO_PASSWORD)
+if not minio_client.bucket_exists(BUCKET_NAME):
+    minio_client.make_bucket(BUCKET_NAME)
+    logger.info("Bucket created", extra={"bucket_name": BUCKET_NAME})
+else:
+    logger.info("Bucket already exists", extra={"bucket_name": BUCKET_NAME})
 
 
 @app.post("/upload")
@@ -170,18 +86,16 @@ def upload_session(file: UploadFile):
         )
         raise HTTPException(status_code=500, detail="File Upload Failed") from e
     try:
-        connection, channel = get_rabbit_channel()
         event_data = {
             "file_name": file.filename,
             "content_type": file.content_type,
             "bucket_name": BUCKET_NAME,
         }
-        channel.basic_publish(
+        rabbit_channel.basic_publish(
             exchange=EXCHANGE_NAME,
             routing_key="video.upload.completed",
             body=json.dumps(event_data),
         )
-        connection.close()
         logger.info(
             "Event published to RabbitMQ",
             extra={

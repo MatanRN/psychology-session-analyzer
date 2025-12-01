@@ -1,14 +1,14 @@
 services:
   session-upload:
     build:
-      context: ./services/session-upload
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/session-upload/Dockerfile
     container_name: session-upload
     environment:
       - MINIO_USER=${MINIO_USER}
       - MINIO_PASSWORD=${MINIO_PASSWORD}
       - MINIO_ENDPOINT=minio:9000
-      - RABBITMQ_HOST=rabbitmq:5672
+      - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USER=${RABBITMQ_USER}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - DD_AGENT_HOST=datadog       # Send traces to the agent container
@@ -27,8 +27,8 @@ services:
         condition: service_started
   audio-extractor:
     build:
-      context: ./services/audio-extractor
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/audio-extractor/Dockerfile
     container_name: audio-extractor
     environment:
       - MINIO_USER=${MINIO_USER}
