@@ -1,0 +1,21 @@
+[project]
+name = "audio-transcriber"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "MatanRN", email = "matan.rn@outlook.com"},
+]
+dependencies = [
+    "ddtrace>=4.0.0",
+    "python-json-logger>=4.0.0",
+    "assemblyai>=0.46.0",
+    "minio>=7.2.20",
+    "psychology-common @ file:///${PROJECT_ROOT}/../common",
+]
+requires-python = "==3.13.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false

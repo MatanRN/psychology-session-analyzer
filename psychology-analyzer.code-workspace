@@ -11,6 +11,10 @@
 		{
 			"name": "Audio Extractor",
 			"path": "services/audio-extractor"
+		},
+		{
+			"name": "Audio Transcriber",
+			"path": "services/audio-transcriber"
 		}
 	],
 	"settings": {
