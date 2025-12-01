@@ -25,7 +25,7 @@ def get_minio_client(endpoint, access_key, secret_key):
             secure=False,
         )
         return client
-    except Exception as e:
+    except Exception:
         logger.exception(
             "MinIO Client Initialization Failed",
             extra={
@@ -33,4 +33,3 @@ def get_minio_client(endpoint, access_key, secret_key):
                 "user": access_key,
             },
         )
-        raise e

@@ -28,9 +28,8 @@ def get_rabbit_channel(
         channel = connection.channel()
 
         return connection, channel
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to connect to RabbitMQ",
             extra={"host": host, "username": username},
         )
-        raise e
