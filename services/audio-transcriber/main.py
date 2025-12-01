@@ -39,19 +39,21 @@ def setup_rabbit_entities(channel):
         exchange=EXCHANGE_NAME, exchange_type="topic", durable=True
     )
     # Ensure queue exists - idempotent
-    channel.queue_declare(queue="audio_transcription_queue", durable=True)
-    # Bind queue to exchange with routing key - idempotent
-    args = {
+    arguments = {
         "x-queue-type": "quorum",
         "x-delivery-limit": MAX_DELIVERY_COUNT,
         "x-dead-letter-exchange": "dead_letter_exchange",
         "x-dead-letter-routing-key": "audio.transcription.failed",
     }
+    channel.queue_declare(
+        queue="audio_transcription_queue",
+        durable=True,
+        arguments=arguments,
+    )
     channel.queue_bind(
         queue="audio_transcription_queue",
         exchange=EXCHANGE_NAME,
         routing_key="audio.extraction.completed",
-        arguments=args,
     )
 
 
