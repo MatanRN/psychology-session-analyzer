@@ -15,6 +15,10 @@
 		{
 			"name": "Audio Transcriber",
 			"path": "services/audio-transcriber"
+		},
+		{
+			"name": "Transcript Analyzer",
+			"path": "services/transcript-analyzer"
 		}
 	],
 	"settings": {
