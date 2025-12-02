@@ -101,12 +101,26 @@ def transcribe_audio(
             with open(temp_file_path, "rb") as audio_file:
                 try:
                     transcription = transcriber.transcribe(audio_file)
+                    if transcription.text is None:
+                        logger.error(
+                            "Transcription text is None",
+                            extra={
+                                "file_name": file_name,
+                                "temp_file_path": temp_file_path,
+                            },
+                        )
+                        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+                        return
                     logger.info(
                         "Audio transcription successful",
                         extra={
                             "file_name": file_name,
                             "temp_file_path": temp_file_path,
                         },
+                    )
+                    logger.debug(
+                        "Transcription results",
+                        extra={"transcription": transcription},
                     )
                 except Exception:
                     logger.exception(
