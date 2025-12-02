@@ -60,7 +60,7 @@ MINIO_PASSWORD = os.getenv("MINIO_PASSWORD")
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
 RABBITMQ_USER = os.getenv("RABBITMQ_USER")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
-BUCKET_NAME = "audio-files"
+BUCKET_NAME = "sessions"
 EXCHANGE_NAME = "events"
 MAX_DELIVERY_COUNT = 3
 
@@ -105,7 +105,8 @@ def process_video(ch, method, properties, body):
         return
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_path = os.path.join(temp_dir, file_name)
+            temp_file_name = os.path.basename(file_name)
+            temp_file_path = os.path.join(temp_dir, temp_file_name)
             with open(temp_file_path, "wb") as f:
                 f.write(data)
             logger.info(
@@ -114,33 +115,38 @@ def process_video(ch, method, properties, body):
             )
             video = moviepy.VideoFileClip(temp_file_path)
             audio = video.audio
-            audio_file_path = temp_file_path.replace(".mp4", ".wav")
-            audio.write_audiofile(audio_file_path, logger=None)
-            audio_file_name = audio_file_path.split("/")[-1]
+            audio_temp_file_path = os.path.splitext(temp_file_path)[0] + ".wav"
+            audio.write_audiofile(audio_temp_file_path, logger=None)
+
+            # Expected structure: year/month/day/lastname/firstname/video/firstname-lastname-date.mp4
+            # We want to replace /video/ with /audio/ and change extension to .wav
+            audio_object_name = file_name.replace("/video/", "/audio/")
+            audio_object_name = os.path.splitext(audio_object_name)[0] + ".wav"
+
             logger.info(
                 "Audio file extracted and saved to temporary directory",
                 extra={
-                    "audio_file_name": audio_file_name,
-                    "audio_file_path": audio_file_path,
+                    "audio_file_name": audio_object_name,
+                    "audio_file_path": audio_temp_file_path,
                 },
             )
             audio.close()
             video.close()
-            with open(audio_file_path, "rb") as audio_file:
+            with open(audio_temp_file_path, "rb") as audio_file:
                 minio_client.put_object(
                     bucket_name=BUCKET_NAME,
-                    object_name=audio_file_name,
+                    object_name=audio_object_name,
                     content_type="audio/wav",
-                    length=os.path.getsize(audio_file_path),
+                    length=os.path.getsize(audio_temp_file_path),
                     data=audio_file,
                 )
             logger.info(
                 "Audio file successfully saved to MinIO",
-                extra={"file_name": audio_file_name, "bucket_name": BUCKET_NAME},
+                extra={"file_name": audio_object_name, "bucket_name": BUCKET_NAME},
             )
         ch.basic_ack(delivery_tag=method.delivery_tag)
         event_data = {
-            "file_name": audio_file_name,
+            "file_name": audio_object_name,
             "content_type": "audio/wav",
             "bucket_name": BUCKET_NAME,
         }
@@ -152,7 +158,7 @@ def process_video(ch, method, properties, body):
         logger.info(
             "Event published to RabbitMQ",
             extra={
-                "file_name": file_name,
+                "file_name": audio_object_name,
                 "exchange": EXCHANGE_NAME,
                 "routing_key": "audio.extraction.completed",
             },
@@ -160,7 +166,7 @@ def process_video(ch, method, properties, body):
     except Exception:
         logger.exception(
             "Audio Extraction Failed. Retrying...",
-            extra={"file_name": file_name, "bucket_name": bucket_name},
+            extra={"file_name": audio_object_name, "bucket_name": bucket_name},
         )
         ch.basic_nack(delivery_tag=method.delivery_tag)
 

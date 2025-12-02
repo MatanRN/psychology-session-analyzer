@@ -11,9 +11,10 @@ It handles:
 
 import json
 import os
+import re
 
 from ddtrace import patch_all
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, Form, UploadFile
 from fastapi.exceptions import HTTPException
 from psychology_common import get_minio_client, get_rabbit_channel, setup_logging
 
@@ -23,7 +24,7 @@ MINIO_PASSWORD = os.getenv("MINIO_PASSWORD")
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
 RABBITMQ_USER = os.getenv("RABBITMQ_USER")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
-BUCKET_NAME = "session-videos"
+BUCKET_NAME = "sessions"
 EXCHANGE_NAME = "events"
 
 logger = setup_logging()
@@ -44,29 +45,57 @@ else:
 
 
 @app.post("/upload")
-def upload_session(file: UploadFile):
+def upload_session(
+    file: UploadFile,
+    date_of_session: str = Form(...),
+    patient_first_name: str = Form(...),
+    patient_last_name: str = Form(...),
+):
     """
     Handles the upload of a session video file.
 
     This endpoint performs the following actions:
-    1. Receives a video file via multipart/form-data.
-    2. Uploads the file to the configured MinIO bucket.
-    3. Publishes a 'session.uploaded' event to RabbitMQ with file metadata.
+    1. Receives a video file and metadata via multipart/form-data.
+    2. Validates that date_of_session matches YYYY-MM-DD format.
+    3. Uploads the file to the configured MinIO bucket with a hierarchical path using year/month/day.
+    4. Publishes a 'video.upload.completed' event to RabbitMQ with file metadata.
 
     Args:
         file (UploadFile): The uploaded video file.
+        date_of_session (str): The date of the session (YYYY-MM-DD).
+        patient_first_name (str): The first name of the patient.
+        patient_last_name (str): The last name of the patient.
 
     Returns:
         dict: A dictionary containing a success message upon completion.
 
     Raises:
         HTTPException: If there is an error uploading to MinIO or publishing to RabbitMQ.
+        HTTPException: If date_of_session format is invalid.
     """
-    logger.info("Received upload request", extra={"file_name": file.filename})
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_of_session):
+        raise HTTPException(
+            status_code=400, detail="date_of_session must be in YYYY-MM-DD format"
+        )
+
+    file_extension = os.path.splitext(file.filename or "")[1]
+    year, month, day = date_of_session.split("-")
+
+    object_name = f"{year}/{month}/{day}/{patient_last_name}/{patient_first_name}/video/{patient_first_name}-{patient_last_name}-{date_of_session}{file_extension}"
+
+    logger.info(
+        "Received upload request",
+        extra={
+            "file_name": file.filename,
+            "object_name": object_name,
+            "patient": f"{patient_first_name} {patient_last_name}",
+            "date": date_of_session,
+        },
+    )
     try:
         minio_client.put_object(
             bucket_name=BUCKET_NAME,
-            object_name=file.filename,
+            object_name=object_name,
             content_type=file.content_type,
             length=file.size,
             data=file.file,
@@ -75,6 +104,7 @@ def upload_session(file: UploadFile):
             "Saved to MinIO",
             extra={
                 "file_name": file.filename,
+                "object_name": object_name,
                 "size": file.size,
                 "bucket": BUCKET_NAME,
             },
@@ -82,12 +112,12 @@ def upload_session(file: UploadFile):
     except Exception as e:
         logger.exception(
             "MinIO Upload Failed",
-            extra={"file_name": file.filename},
+            extra={"file_name": file.filename, "object_name": object_name},
         )
         raise HTTPException(status_code=500, detail="File Upload Failed") from e
     try:
         event_data = {
-            "file_name": file.filename,
+            "file_name": object_name,
             "content_type": file.content_type,
             "bucket_name": BUCKET_NAME,
         }
@@ -99,7 +129,7 @@ def upload_session(file: UploadFile):
         logger.info(
             "Event published to RabbitMQ",
             extra={
-                "file_name": file.filename,
+                "file_name": object_name,
                 "exchange": EXCHANGE_NAME,
                 "routing_key": "video.upload.completed",
             },
@@ -107,7 +137,7 @@ def upload_session(file: UploadFile):
     except Exception as e:
         logger.exception(
             "RabbitMQ Publish Failed",
-            extra={"file_name": file.filename},
+            extra={"file_name": object_name},
         )
         raise HTTPException(status_code=500, detail="RabbitMQ Publish Failed") from e
     return {"message": "Session uploaded successfully, processing started"}

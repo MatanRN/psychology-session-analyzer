@@ -91,7 +91,8 @@ def transcribe_audio(
             return
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_path = os.path.join(temp_dir, file_name)
+            temp_file_name = os.path.basename(file_name)
+            temp_file_path = os.path.join(temp_dir, temp_file_name)
             with open(temp_file_path, "wb") as audio_file:
                 audio_file.write(data)
             logger.info(
@@ -133,23 +134,33 @@ def transcribe_audio(
                     ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
                     return
 
-        transcription_file_name = file_name.split(".")[0] + ".txt"
-        transcription_file_path = os.path.join(temp_dir, transcription_file_name)
-        with tempfile.TemporaryDirectory() as temp_dir:
-            transcription_file_path = os.path.join(temp_dir, transcription_file_name)
+            # Expected structure: year/month/day/lastname/firstname/audio/firstname-lastname-date.wav
+            # We want to replace /audio/ with /transcription/ and change extension to .txt
+            transcription_object_name = file_name.replace("/audio/", "/transcription/")
+            transcription_object_name = (
+                os.path.splitext(transcription_object_name)[0] + ".txt"
+            )
+
+            transcription_temp_file_name = os.path.basename(transcription_object_name)
+            transcription_file_path = os.path.join(
+                temp_dir, transcription_temp_file_name
+            )
+
             with open(transcription_file_path, "w") as f:
-                f.write(transcription.text)
+                for utterance in transcription.utterances:
+                    f.write(f"Speaker {utterance.speaker}: {utterance.text}\n")
+                    
             logger.info(
                 "Transcription saved to temporary directory",
                 extra={
-                    "file_name": file_name,
+                    "file_name": transcription_temp_file_name,
                     "temp_file_path": transcription_file_path,
                 },
             )
             with open(transcription_file_path, "rb") as transcription_file:
                 minio_client.put_object(
                     bucket_name=BUCKET_NAME,
-                    object_name=transcription_file_name,
+                    object_name=transcription_object_name,
                     content_type="text/plain",
                     length=os.path.getsize(transcription_file_path),
                     data=transcription_file,
@@ -157,13 +168,13 @@ def transcribe_audio(
             logger.info(
                 "Transcription saved to MinIO",
                 extra={
-                    "file_name": transcription_file_name,
+                    "file_name": transcription_object_name,
                     "bucket_name": BUCKET_NAME,
                 },
             )
         ch.basic_ack(delivery_tag=method.delivery_tag)
         event_data = {
-            "file_name": transcription_file_name,
+            "file_name": transcription_object_name,
             "content_type": "text/plain",
             "bucket_name": BUCKET_NAME,
         }
@@ -175,7 +186,7 @@ def transcribe_audio(
         logger.info(
             "Event published to RabbitMQ",
             extra={
-                "file_name": transcription_file_name,
+                "file_name": transcription_object_name,
                 "exchange": EXCHANGE_NAME,
                 "routing_key": "audio.transcription.completed",
             },
@@ -198,7 +209,7 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
 RABBITMQ_USER = os.getenv("RABBITMQ_USER")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
-BUCKET_NAME = "audio-transcriptions"
+BUCKET_NAME = "sessions"
 EXCHANGE_NAME = "events"
 MAX_DELIVERY_COUNT = 3
 
