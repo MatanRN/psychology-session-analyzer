@@ -149,7 +149,7 @@ def transcribe_audio(
             with open(transcription_file_path, "w") as f:
                 for utterance in transcription.utterances:
                     f.write(f"Speaker {utterance.speaker}: {utterance.text}\n")
-                    
+                    # TODO: READ ABOUT DATADOG LOGGING IN THE LINK - https://docs.datadoghq.com/tracing/other_telemetry/connect_logs_and_traces/python/
             logger.info(
                 "Transcription saved to temporary directory",
                 extra={

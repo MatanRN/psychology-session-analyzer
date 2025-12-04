@@ -15,8 +15,10 @@ import os
 import tempfile
 
 import moviepy
+import pika
 from ddtrace import patch_all
-from psychology_common import get_minio_client, get_rabbit_channel, setup_logging
+from minio import Minio
+from psychology_common import setup_logging
 
 
 def setup_rabbit_entities(channel):
@@ -54,6 +56,8 @@ def setup_rabbit_entities(channel):
 
 
 # Service setup and configuration
+patch_all()
+logger = setup_logging()
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
 MINIO_USER = os.getenv("MINIO_USER")
 MINIO_PASSWORD = os.getenv("MINIO_PASSWORD")
@@ -63,10 +67,12 @@ RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
 BUCKET_NAME = "sessions"
 EXCHANGE_NAME = "events"
 MAX_DELIVERY_COUNT = 3
-
-patch_all()
-logger = setup_logging()
-minio_client = get_minio_client(MINIO_ENDPOINT, MINIO_USER, MINIO_PASSWORD)
+minio_client = Minio(
+    endpoint=MINIO_ENDPOINT,
+    access_key=MINIO_USER,
+    secret_key=MINIO_PASSWORD,
+    secure=False,
+)
 if not minio_client.bucket_exists(BUCKET_NAME):
     minio_client.make_bucket(BUCKET_NAME)
     logger.info("Bucket created", extra={"bucket_name": BUCKET_NAME})
@@ -172,9 +178,10 @@ def process_video(ch, method, properties, body):
 
 
 def main():
-    rabbit_connection, rabbit_channel = get_rabbit_channel(
-        RABBITMQ_USER, RABBITMQ_PASSWORD, RABBITMQ_HOST
-    )
+    credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
+    parameters = pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials)
+    rabbit_connection = pika.BlockingConnection(parameters)
+    rabbit_channel = rabbit_connection.channel()
     setup_rabbit_entities(rabbit_channel)
     rabbit_channel.basic_consume(
         queue="audio_extraction_queue", on_message_callback=process_video

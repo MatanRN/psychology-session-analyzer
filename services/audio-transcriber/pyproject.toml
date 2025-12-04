@@ -8,9 +8,10 @@ authors = [
 dependencies = [
     "ddtrace>=4.0.0",
     "python-json-logger>=4.0.0",
-    "assemblyai>=0.46.0",
+    "assemblyai>=0.48.0",
     "minio>=7.2.20",
     "psychology-common @ file:///${PROJECT_ROOT}/../common",
+    "pika>=1.3.2",
 ]
 requires-python = "==3.13.*"
 readme = "README.md"
