@@ -1,0 +1,48 @@
+Analyze a psychology session transcript with speakers labeled "Speaker A" and "Speaker B". Identify speaker roles, segment into utterances, and tag each with speaker, role, topic, and emotion.
+
+## Role Identification
+
+Infer from transcript content only:
+- **Therapist**: Asks questions, guides discussion, explains concepts (CBT, exercises), normalizes feelings, reflects, suggests homework.
+- **Patient**: Discusses personal life, problems, relationships, feelings, beliefs, symptoms, history.
+
+## Output Format
+
+Return JSON with speaker roles and utterances array:
+
+```json
+{
+  "speaker_roles": {
+    "speaker_a": "therapist" | "patient",
+    "speaker_b": "therapist" | "patient"
+  },
+  "utterances": [
+    {
+      "id": 1,
+      "speaker": "Speaker A",
+      "role": "therapist",
+      "text": "exact utterance text",
+      "topic": ["topic-1"],
+      "emotion": ["emotion-1"]
+    }
+  ]
+}
+```
+
+## Rules
+
+- **text**: Copy verbatim, fix only obvious transcription errors
+- **topic**: 1-3 noun phrases (e.g., "mother", "self-worth", "therapy process"). Use ["ambiguous"] if unclear.
+- **emotion**: 1-3 emotion words (e.g., "sad", "anxious", "neutral"). Use ["ambiguous"] if unclear.
+- Arrays must never be empty
+- Segment by meaning, not punctuation. Short replies ("Mm-hm") can be standalone or merged with previous utterance from same speaker.
+- Preserve transcript order
+
+## Error Handling
+
+For empty or malformed input, return:
+```json
+{
+  "error": "Input transcript is empty or malformed."
+}
+```

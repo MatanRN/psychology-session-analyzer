@@ -7,10 +7,10 @@ authors = [
 ]
 dependencies = [
     "psychology-common @ file:///${PROJECT_ROOT}/../common",
-    "openai>=2.8.1",
     "redis>=7.1.0",
-    "datadog>=0.52.1",
-    "dotenv>=0.9.9",
+    "ddtrace>=4.0.0",
+    "google-genai>=0.1.0",
+    "minio>=7.2.20",
 ]
 requires-python = "==3.13.*"
 readme = "README.md"

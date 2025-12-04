@@ -10,7 +10,8 @@
             "envFile": "${workspaceFolder}/../../.env",
             "env": {
                 "MINIO_ENDPOINT": "localhost:9000",
-                "RABBITMQ_HOST": "localhost:5672"
+                "RABBITMQ_HOST": "localhost:5672",
+                "REDIS_HOST": "localhost:6379"
             },
             "justMyCode": true
         }
