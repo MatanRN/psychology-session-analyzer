@@ -134,8 +134,7 @@ def transcribe_audio(
                     ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
                     return
 
-            # Expected structure: year/month/day/lastname/firstname/audio/firstname-lastname-date.wav
-            # We want to replace /audio/ with /transcription/ and change extension to .txt
+            # Expected structure: year/month/day/session_uuid/audio/firstname-lastname-date.wav
             transcription_object_name = file_name.replace("/audio/", "/transcription/")
             transcription_object_name = (
                 os.path.splitext(transcription_object_name)[0] + ".txt"

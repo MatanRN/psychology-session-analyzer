@@ -124,8 +124,7 @@ def process_video(ch, method, properties, body):
             audio_temp_file_path = os.path.splitext(temp_file_path)[0] + ".wav"
             audio.write_audiofile(audio_temp_file_path, logger=None)
 
-            # Expected structure: year/month/day/lastname/firstname/video/firstname-lastname-date.mp4
-            # We want to replace /video/ with /audio/ and change extension to .wav
+            # Expected structure: year/month/day/session_uuid/video/firstname-lastname-date.mp4
             audio_object_name = file_name.replace("/video/", "/audio/")
             audio_object_name = os.path.splitext(audio_object_name)[0] + ".wav"
 

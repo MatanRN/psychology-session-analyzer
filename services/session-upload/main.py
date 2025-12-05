@@ -12,6 +12,7 @@ It handles:
 import json
 import os
 import re
+import uuid
 
 import pika
 from ddtrace import patch_all
@@ -87,14 +88,16 @@ def upload_session(
 
     file_extension = os.path.splitext(file.filename or "")[1]
     year, month, day = date_of_session.split("-")
+    session_id = str(uuid.uuid4())
 
-    object_name = f"{year}/{month}/{day}/{patient_last_name}/{patient_first_name}/video/{patient_first_name}-{patient_last_name}-{date_of_session}{file_extension}"
+    object_name = f"{year}/{month}/{day}/{session_id}/video/{patient_first_name}-{patient_last_name}-{date_of_session}{file_extension}"
 
     logger.info(
         "Received upload request",
         extra={
             "file_name": file.filename,
             "object_name": object_name,
+            "session_id": session_id,
             "patient": f"{patient_first_name} {patient_last_name}",
             "date": date_of_session,
         },
