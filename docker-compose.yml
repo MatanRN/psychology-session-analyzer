@@ -94,6 +94,11 @@ services:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - REDIS_HOST=redis
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=psychology_analyzer
       - DD_AGENT_HOST=datadog       # Send traces to the agent container
       - DD_SERVICE=transcript-analyzer   # Name of service in DD Dashboard
       - DD_LOGS_INJECTION=true
@@ -106,6 +111,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+      postgres:
+        condition: service_healthy
   rabbitmq:
     image: rabbitmq:4.2.1-management-alpine
     container_name: rabbitmq
@@ -147,6 +154,24 @@ services:
       - redis_data:/data
     networks:
       - analyzer-network
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=psychology_analyzer
+    ports:
+      - 5433:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d psychology_analyzer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - analyzer-network
   datadog:
     image: gcr.io/datadoghq/agent:7
     container_name: datadog
@@ -170,6 +195,7 @@ services:
 volumes:
   minio_data:
   redis_data:
+  postgres_data:
   datadog-run-socket:
 networks:
   analyzer-network:

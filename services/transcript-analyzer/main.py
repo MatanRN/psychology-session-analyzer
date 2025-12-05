@@ -9,8 +9,21 @@ from google import genai
 from minio import Minio
 from psychology_common import setup_logging
 from pydantic import ValidationError
+from sqlmodel import Session
 
-from models import TranscriptAnalysis
+from analysis import (
+    get_patient_relationships,
+    get_positive_and_negative_topics,
+    get_sentiment_scores,
+)
+from database import (
+    create_session,
+    get_engine,
+    get_or_create_patient,
+    init_db,
+    save_insights,
+)
+from models import Insights, TranscriptAnalysis
 from utils import EXCHANGE_NAME, MAX_DELIVERY_COUNT, setup_rabbit_entities
 
 
@@ -35,17 +48,30 @@ def call_llm(gemini_client: genai.Client, contents: str, system_prompt: str):
     return response.text
 
 
-def cache_llm_analysis(
+def cache_llm_response(
     redis_client: redis.Redis, cache_key: str, analysis: TranscriptAnalysis
 ):
     redis_client.set(cache_key, analysis.model_dump_json())
-    logger.info("Cached response", extra={"cache_key": cache_key})
+    logger.info("Cached LLM response in Redis", extra={"cache_key": cache_key})
+
+
+def generate_insights(analysis: TranscriptAnalysis):
+    positive_topics, negative_topics = get_positive_and_negative_topics(analysis)
+    sentiment_scores = get_sentiment_scores(analysis)
+    patient_relationships = get_patient_relationships(analysis)
+    return Insights(
+        positive_topics=positive_topics,
+        negative_topics=negative_topics,
+        sentiment_scores=sentiment_scores,
+        patient_relationships=patient_relationships,
+    )
 
 
 def analyze_transcript(
     gemini_client: genai.Client,
     minio_client: Minio,
     redis_client: redis.Redis,
+    db_engine,
     ch,
     method,
     properties,
@@ -63,24 +89,44 @@ def analyze_transcript(
         data = json.loads(body)
         file_name = data["file_name"]
         bucket_name = data["bucket_name"]
+
+        session_id = file_name.split("/")[3]
+        session_date = "-".join(file_name.split("/")[0:3])
+        patient_first_name, patient_last_name = (
+            file_name.split("/")[5].split(".")[0].split("-")[0:2]
+        )
+
         transcript = get_transcript(minio_client, bucket_name, file_name)
         with open("system.txt", "r", encoding="utf-8") as f:
             system_prompt = f.read()
         response = call_llm(gemini_client, transcript, system_prompt)
         analysis = TranscriptAnalysis.model_validate_json(response)
-        split_file_name = file_name.split("/")
-        year = split_file_name[0]
-        month = split_file_name[1]
-        day = split_file_name[2]
-        lastname = split_file_name[3]
-        firstname = split_file_name[4]
-        cache_key = f"analysis:{year}:{month}:{day}:{lastname}:{firstname}"
-        cache_llm_analysis(redis_client, cache_key, analysis)
+
+        cache_key = f"analysis:{session_id}"
+
+        cache_llm_response(redis_client, cache_key, analysis)
+        insights = generate_insights(analysis)
+        logger.info(
+            "Generated insights", extra={"insights": insights.model_dump_json()}
+        )
+
+        with Session(db_engine) as db_session:
+            patient = get_or_create_patient(
+                db_session, patient_first_name, patient_last_name
+            )
+            create_session(db_session, session_id, session_date, patient)
+            save_insights(db_session, session_id, insights)
+        logger.info("Saved insights to database", extra={"session_id": session_id})
+
         ch.basic_ack(delivery_tag=method.delivery_tag)
+        event_data = {
+            "file_name": file_name,
+            "bucket_name": bucket_name,
+        }
         ch.basic_publish(
             exchange=EXCHANGE_NAME,
             routing_key="transcript.analysis.completed",
-            body=json.dumps(data),
+            body=json.dumps(event_data),
         )
         logger.info(
             "Event published to RabbitMQ",
@@ -113,6 +159,11 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
 RABBITMQ_USER = os.getenv("RABBITMQ_USER")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
+POSTGRES_HOST = os.getenv("POSTGRES_HOST")
+POSTGRES_USER = os.getenv("POSTGRES_USER")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5433"))
+POSTGRES_DB = os.getenv("POSTGRES_DB")
 BUCKET_NAME = "sessions"
 
 
@@ -143,8 +194,14 @@ def main():
         raise ConnectionError("Redis connection failed")
     gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
+    db_engine = get_engine(
+        POSTGRES_HOST, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_PORT, POSTGRES_DB
+    )
+    init_db(db_engine)
+    logger.info("Database initialized", extra={"host": POSTGRES_HOST})
+
     callback = functools.partial(
-        analyze_transcript, gemini_client, minio_client, redis_client
+        analyze_transcript, gemini_client, minio_client, redis_client, db_engine
     )
     rabbit_channel.basic_consume(
         queue="transcript_analysis_queue", on_message_callback=callback
