@@ -17,8 +17,9 @@ RUN sed -i 's|\${PROJECT_ROOT}/..|/app/services|g' pyproject.toml
 # Install common package explicitly
 RUN pip install .
 
-COPY services/transcript-analyzer/main.py .
-
 COPY services/transcript-analyzer/system.txt .
+COPY services/transcript-analyzer/models.py .
+COPY services/transcript-analyzer/main.py .
+COPY services/transcript-analyzer/utils.py .
 
 ENTRYPOINT ["python", "main.py"]
