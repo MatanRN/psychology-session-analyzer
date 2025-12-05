@@ -21,5 +21,7 @@ COPY services/transcript-analyzer/system.txt .
 COPY services/transcript-analyzer/models.py .
 COPY services/transcript-analyzer/main.py .
 COPY services/transcript-analyzer/utils.py .
+COPY services/transcript-analyzer/analysis.py .
+COPY services/transcript-analyzer/database.py .
 
 ENTRYPOINT ["python", "main.py"]
