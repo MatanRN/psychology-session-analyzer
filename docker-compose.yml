@@ -113,6 +113,29 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+  session-api:
+    build:
+      context: .
+      dockerfile: ./services/session-api/Dockerfile
+    container_name: session-api
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=psychology_analyzer
+      - DD_AGENT_HOST=datadog
+      - DD_SERVICE=session-api
+      - DD_LOGS_INJECTION=true
+    ports:
+      - 8080:8080
+    networks:
+      - analyzer-network
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "python", "service": "session-api"}]'
+    depends_on:
+      postgres:
+        condition: service_healthy
   rabbitmq:
     image: rabbitmq:4.2.1-management-alpine
     container_name: rabbitmq

@@ -19,6 +19,10 @@
 		{
 			"name": "Transcript Analyzer",
 			"path": "services/transcript-analyzer"
+		},
+		{
+			"name": "Session API",
+			"path": "services/session-api"
 		}
 	],
 	"settings": {

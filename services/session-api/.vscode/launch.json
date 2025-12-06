@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Session API",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "main:app",
+                "--reload",
+                "--port", "8080"
+            ],
+            "envFile": "${workspaceFolder}/../../.env",
+            "env": {
+                "POSTGRES_HOST": "localhost",
+                "POSTGRES_PORT": "5433",
+            },
+            "jinja": true,
+            "justMyCode": true
+        }
+    ]
+}
