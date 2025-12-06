@@ -9,51 +9,92 @@ from ddtrace import patch_all
 from minio import Minio
 from psychology_common.logging import setup_logging
 
+from utils import BUCKET_NAME, EXCHANGE_NAME, MAX_DELIVERY_COUNT, setup_rabbit_entities
 
-def setup_rabbit_entities(channel):
+
+def get_audio(minio_client: Minio, bucket_name: str, object_name: str):
+    with minio_client.get_object(
+        bucket_name=bucket_name,
+        object_name=object_name,
+    ) as response:
+        data = response.data
+    return data
+
+
+def save_audio_to_temp(temp_dir: str, file_name: str, data: bytes) -> str:
+    """Saves the downloaded audio bytes to a temporary file."""
+    temp_file_name = os.path.basename(file_name)
+    temp_file_path = os.path.join(temp_dir, temp_file_name)
+    with open(temp_file_path, "wb") as audio_file:
+        audio_file.write(data)
+
+    logger.info(
+        "Audio file saved to temporary directory",
+        extra={"file_name": file_name, "temp_file_path": temp_file_path},
+    )
+    return temp_file_path
+
+
+def transcribe_audio_file(transcriber: aai.Transcriber, audio_file_path: str):
+    """Performs the actual transcription using the AssemblyAI client."""
+    with open(audio_file_path, "rb") as audio_file:
+        transcription = transcriber.transcribe(audio_file)
+        if transcription.text is None:
+            raise ValueError("Transcription text is None")
+    logger.info(
+        "Audio transcription successful",
+    )
+    return transcription
+
+
+def save_transcription_to_temp(
+    temp_dir: str, original_file_name: str, transcription
+) -> tuple[str, str]:
     """
-    Establishes a new blocking connection to RabbitMQ and returns a channel.
-
-    This function creates a fresh connection for each request to ensure thread safety
-    and avoid connection closure issues typical with long-lived connections in
-    threaded environments. It also ensures the target exchange exists.
-
-    Returns:
-        tuple: A tuple containing (connection, channel).
-            - connection (pika.BlockingConnection): The active RabbitMQ connection.
-            - channel (pika.channel.Channel): The active channel for publishing.
+    Formats the transcription and saves it to a temporary text file.
+    Returns the path to the temp file and the target object name for storage.
     """
+    # Expected structure: year/month/day/session_uuid/audio/firstname-lastname-date.wav
+    # Becomes: year/month/day/session_uuid/transcription/firstname-lastname-date.txt
+    transcription_object_name = original_file_name.replace("/audio/", "/transcription/")
+    transcription_object_name = os.path.splitext(transcription_object_name)[0] + ".txt"
 
-    # Set up dead letter hanlding
-    channel.exchange_declare(
-        exchange="dead_letter_exchange", exchange_type="direct", durable=True
+    transcription_temp_file_name = os.path.basename(transcription_object_name)
+    transcription_file_path = os.path.join(temp_dir, transcription_temp_file_name)
+
+    with open(transcription_file_path, "w", encoding="utf-8") as f:
+        for utterance in transcription.utterances:
+            f.write(f"Speaker {utterance.speaker}: {utterance.text}\n")
+            # TODO: READ ABOUT DATADOG LOGGING IN THE LINK - https://docs.datadoghq.com/tracing/other_telemetry/connect_logs_and_traces/python/
+
+    logger.info(
+        "Transcription saved to temporary file",
+        extra={
+            "file_name": transcription_temp_file_name,
+            "temp_file_path": transcription_file_path,
+        },
     )
-    channel.queue_declare(queue="dlq_audio_transcriber", durable=True)
-    channel.queue_bind(
-        queue="dlq_audio_transcriber",
-        exchange="dead_letter_exchange",
-        routing_key="audio.transcription.failed",
-    )
-    # Ensure exchanges exists - idempotent
-    channel.exchange_declare(
-        exchange=EXCHANGE_NAME, exchange_type="topic", durable=True
-    )
-    # Ensure queue exists - idempotent
-    arguments = {
-        "x-queue-type": "quorum",
-        "x-delivery-limit": MAX_DELIVERY_COUNT,
-        "x-dead-letter-exchange": "dead_letter_exchange",
-        "x-dead-letter-routing-key": "audio.transcription.failed",
-    }
-    channel.queue_declare(
-        queue="audio_transcription_queue",
-        durable=True,
-        arguments=arguments,
-    )
-    channel.queue_bind(
-        queue="audio_transcription_queue",
-        exchange=EXCHANGE_NAME,
-        routing_key="audio.extraction.completed",
+    return transcription_file_path, transcription_object_name
+
+
+def upload_transcription_to_minio(
+    minio_client: Minio, bucket_name: str, object_name: str, file_path: str
+):
+    """Uploads the local transcription file to MinIO."""
+    with open(file_path, "rb") as transcription_file:
+        minio_client.put_object(
+            bucket_name=bucket_name,
+            object_name=object_name,
+            content_type="text/plain",
+            length=os.path.getsize(file_path),
+            data=transcription_file,
+        )
+    logger.info(
+        "Transcription saved to MinIO",
+        extra={
+            "file_name": object_name,
+            "bucket_name": bucket_name,
+        },
     )
 
 
@@ -76,101 +117,26 @@ def transcribe_audio(
         file_name = data["file_name"]
         bucket_name = data["bucket_name"]
 
-        try:
-            with minio_client.get_object(
-                bucket_name=bucket_name,
-                object_name=file_name,
-            ) as response:
-                data = response.data
-        except Exception:
-            logger.exception(
-                "MinIO Object Retrieval Failed",
-                extra={"file_name": file_name, "bucket_name": bucket_name},
-            )
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-            return
+        data = get_audio(minio_client, bucket_name, file_name)
+        logger.info(
+            "Audio file successfully retrieved from MinIO",
+            extra={"file_name": file_name, "bucket_name": bucket_name},
+        )
 
+        # Transcribe audio file and save results to temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file_name = os.path.basename(file_name)
-            temp_file_path = os.path.join(temp_dir, temp_file_name)
-            with open(temp_file_path, "wb") as audio_file:
-                audio_file.write(data)
-            logger.info(
-                "Audio file saved to temporary directory",
-                extra={"file_name": file_name, "temp_file_path": temp_file_path},
+            temp_file_path = save_audio_to_temp(temp_dir, file_name, data)
+            transcription = transcribe_audio_file(transcriber, temp_file_path)
+            transcription_file_path, transcription_object_name = (
+                save_transcription_to_temp(temp_dir, file_name, transcription)
             )
-            with open(temp_file_path, "rb") as audio_file:
-                try:
-                    transcription = transcriber.transcribe(audio_file)
-                    if transcription.text is None:
-                        logger.error(
-                            "Transcription text is None",
-                            extra={
-                                "file_name": file_name,
-                                "temp_file_path": temp_file_path,
-                            },
-                        )
-                        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-                        return
-                    logger.info(
-                        "Audio transcription successful",
-                        extra={
-                            "file_name": file_name,
-                            "temp_file_path": temp_file_path,
-                        },
-                    )
-                    logger.debug(
-                        "Transcription results",
-                        extra={"transcription": transcription},
-                    )
-                except Exception:
-                    logger.exception(
-                        "Audio transcription failed",
-                        extra={
-                            "file_name": file_name,
-                            "temp_file_path": temp_file_path,
-                        },
-                    )
-                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-                    return
-
-            # Expected structure: year/month/day/session_uuid/audio/firstname-lastname-date.wav
-            transcription_object_name = file_name.replace("/audio/", "/transcription/")
-            transcription_object_name = (
-                os.path.splitext(transcription_object_name)[0] + ".txt"
+            upload_transcription_to_minio(
+                minio_client,
+                bucket_name,
+                transcription_object_name,
+                transcription_file_path,
             )
 
-            transcription_temp_file_name = os.path.basename(transcription_object_name)
-            transcription_file_path = os.path.join(
-                temp_dir, transcription_temp_file_name
-            )
-
-            with open(transcription_file_path, "w") as f:
-                for utterance in transcription.utterances:
-                    f.write(f"Speaker {utterance.speaker}: {utterance.text}\n")
-                    # TODO: READ ABOUT DATADOG LOGGING IN THE LINK - https://docs.datadoghq.com/tracing/other_telemetry/connect_logs_and_traces/python/
-            logger.info(
-                "Transcription saved to temporary directory",
-                extra={
-                    "file_name": transcription_temp_file_name,
-                    "temp_file_path": transcription_file_path,
-                },
-            )
-            with open(transcription_file_path, "rb") as transcription_file:
-                minio_client.put_object(
-                    bucket_name=BUCKET_NAME,
-                    object_name=transcription_object_name,
-                    content_type="text/plain",
-                    length=os.path.getsize(transcription_file_path),
-                    data=transcription_file,
-                )
-            logger.info(
-                "Transcription saved to MinIO",
-                extra={
-                    "file_name": transcription_object_name,
-                    "bucket_name": BUCKET_NAME,
-                },
-            )
         ch.basic_ack(delivery_tag=method.delivery_tag)
         event_data = {
             "file_name": transcription_object_name,
@@ -190,9 +156,10 @@ def transcribe_audio(
                 "routing_key": "audio.transcription.completed",
             },
         )
-    except Exception:
+    except Exception as e:
         logger.exception(
             "Audio Transcription Failed",
+            extra={"error": e},
         )
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
         return
@@ -208,9 +175,6 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
 RABBITMQ_USER = os.getenv("RABBITMQ_USER")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
-BUCKET_NAME = "sessions"
-EXCHANGE_NAME = "events"
-MAX_DELIVERY_COUNT = 3
 
 
 def main():
@@ -241,6 +205,7 @@ def main():
     rabbit_channel.basic_consume(
         queue="audio_transcription_queue", on_message_callback=callback
     )
+    logger.info("Service successfully initialized. Message consumption started.")
     rabbit_channel.start_consuming()
 
 
