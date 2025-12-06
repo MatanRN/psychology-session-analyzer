@@ -11,7 +11,6 @@ It handles:
 
 import json
 import os
-import re
 import uuid
 
 import pika
@@ -52,12 +51,20 @@ else:
     logger.info("Bucket already exists", extra={"bucket_name": BUCKET_NAME})
 
 
-@app.post("/upload")
+@app.post("/session/upload")
 def upload_session(
     file: UploadFile,
-    date_of_session: str = Form(...),
-    patient_first_name: str = Form(...),
-    patient_last_name: str = Form(...),
+    date_of_session: str = Form(
+        ...,
+        regex=r"^\d{4}-\d{2}-\d{2}$",
+        description="This must be in YYYY-MM-DD format",
+    ),
+    patient_first_name: str = Form(
+        ..., min_length=1, description="The first name of the patient"
+    ),
+    patient_last_name: str = Form(
+        ..., min_length=1, description="The last name of the patient"
+    ),
 ):
     """
     Handles the upload of a session video file.
@@ -79,12 +86,10 @@ def upload_session(
 
     Raises:
         HTTPException: If there is an error uploading to MinIO or publishing to RabbitMQ.
-        HTTPException: If date_of_session format is invalid.
+        HTTPException: If file is not a video/mp4 file.
     """
-    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_of_session):
-        raise HTTPException(
-            status_code=400, detail="date_of_session must be in YYYY-MM-DD format"
-        )
+    if file.content_type != "video/mp4":
+        raise HTTPException(status_code=422, detail="File must be a video/mp4 file")
 
     file_extension = os.path.splitext(file.filename or "")[1]
     year, month, day = date_of_session.split("-")
