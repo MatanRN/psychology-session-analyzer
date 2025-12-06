@@ -24,7 +24,7 @@ from database import (
     save_insights,
 )
 from models import Insights, TranscriptAnalysis
-from utils import EXCHANGE_NAME, MAX_DELIVERY_COUNT, setup_rabbit_entities
+from utils import BUCKET_NAME, EXCHANGE_NAME, MAX_DELIVERY_COUNT, setup_rabbit_entities
 
 
 def get_transcript(minio_client: Minio, bucket_name: str, object_name: str):
@@ -32,6 +32,10 @@ def get_transcript(minio_client: Minio, bucket_name: str, object_name: str):
         bucket_name=bucket_name, object_name=object_name
     ) as response:
         data = response.data.decode("utf-8")
+        logger.info(
+            "Transcript successfully retrieved from MinIO",
+            extra={"file_name": object_name, "bucket_name": bucket_name},
+        )
         return data
 
 
@@ -44,6 +48,9 @@ def call_llm(gemini_client: genai.Client, contents: str, system_prompt: str):
             "response_schema": TranscriptAnalysis,
             "system_instruction": system_prompt,
         },
+    )
+    logger.info(
+        "LLM response successfully retrieved",
     )
     return response.text
 
@@ -59,6 +66,7 @@ def generate_insights(analysis: TranscriptAnalysis):
     positive_topics, negative_topics = get_positive_and_negative_topics(analysis)
     sentiment_scores = get_sentiment_scores(analysis)
     patient_relationships = get_patient_relationships(analysis)
+    logger.info("Generated insights from transcript")
     return Insights(
         positive_topics=positive_topics,
         negative_topics=negative_topics,
@@ -81,6 +89,15 @@ def upload_to_tables(
         )
         create_session(db_session, session_id, session_date, patient)
         save_insights(db_session, session_id, insights)
+        logger.info(
+            "Uploaded insights to database",
+            extra={
+                "session_id": session_id,
+                "patient_first_name": patient_first_name,
+                "patient_last_name": patient_last_name,
+                "session_date": session_date,
+            },
+        )
 
 
 def analyze_transcript(
@@ -117,14 +134,13 @@ def analyze_transcript(
             system_prompt = f.read()
         response = call_llm(gemini_client, transcript, system_prompt)
         analysis = TranscriptAnalysis.model_validate_json(response)
-
+        logger.info(
+            "Transcript model validated successfully",
+        )
         cache_key = f"analysis:{session_id}"
 
         cache_llm_response(redis_client, cache_key, analysis)
         insights = generate_insights(analysis)
-        logger.info(
-            "Generated insights", extra={"insights": insights.model_dump_json()}
-        )
 
         upload_to_tables(
             db_engine,
@@ -134,7 +150,6 @@ def analyze_transcript(
             session_date,
             insights,
         )
-        logger.info("Uploaded insights to database", extra={"session_id": session_id})
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
         event_data = {
@@ -161,7 +176,7 @@ def analyze_transcript(
     except ValidationError as e:
         logger.exception(
             "Error validating response from Gemini",
-            extra={"error": e},
+            extra={"error": e, "Model": TranscriptAnalysis.model_json_schema()},
         )
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
         return
@@ -182,7 +197,6 @@ POSTGRES_USER = os.getenv("POSTGRES_USER")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5433"))
 POSTGRES_DB = os.getenv("POSTGRES_DB")
-BUCKET_NAME = "sessions"
 
 
 def main():
@@ -224,6 +238,7 @@ def main():
     rabbit_channel.basic_consume(
         queue="transcript_analysis_queue", on_message_callback=callback
     )
+    logger.info("Service successfully initialized. Message consumption started.")
     rabbit_channel.start_consuming()
 
 

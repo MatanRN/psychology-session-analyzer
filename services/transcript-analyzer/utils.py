@@ -1,3 +1,4 @@
+BUCKET_NAME = "sessions"
 EXCHANGE_NAME = "events"
 MAX_DELIVERY_COUNT = 3
 
