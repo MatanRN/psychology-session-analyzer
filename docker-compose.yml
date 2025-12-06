@@ -147,10 +147,10 @@ services:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping && nc -z rabbitmq 5672"] # Check if RabbitMQ is running and accepting connections
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
     networks:
       - analyzer-network
   minio:
