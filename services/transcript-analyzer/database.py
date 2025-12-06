@@ -1,10 +1,11 @@
 from datetime import date
 from uuid import UUID
 
+from psychology_common.db_models import Patient, SessionInsights
+from psychology_common.db_models import Session as SessionEntity
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from models import Insights, Patient, SessionInsights
-from models import Session as SessionEntity
+from models import Insights
 
 
 def get_engine(host: str, user: str, password: str, port: int, database: str):

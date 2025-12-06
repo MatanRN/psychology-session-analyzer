@@ -18,7 +18,7 @@ import moviepy
 import pika
 from ddtrace import patch_all
 from minio import Minio
-from psychology_common import setup_logging
+from psychology_common.logging import setup_logging
 
 
 def setup_rabbit_entities(channel):

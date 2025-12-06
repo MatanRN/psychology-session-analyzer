@@ -7,7 +7,7 @@ import redis
 from ddtrace import patch_all
 from google import genai
 from minio import Minio
-from psychology_common import setup_logging
+from psychology_common.logging import setup_logging
 from pydantic import ValidationError
 from sqlmodel import Session
 
@@ -67,6 +67,23 @@ def generate_insights(analysis: TranscriptAnalysis):
     )
 
 
+def upload_to_tables(
+    db_engine: Engine,
+    patient_first_name: str,
+    patient_last_name: str,
+    session_id: str,
+    session_date: str,
+    insights: Insights,
+):
+    with Session(db_engine) as db_session:
+        patient = get_or_create_patient(
+            db_session, patient_first_name, patient_last_name
+        )
+        create_session(db_session, session_id, session_date, patient)
+        save_insights(db_session, session_id, insights)
+    logger.info("Uploaded insights to database", extra={"session_id": session_id})
+
+
 def analyze_transcript(
     gemini_client: genai.Client,
     minio_client: Minio,
@@ -110,13 +127,15 @@ def analyze_transcript(
             "Generated insights", extra={"insights": insights.model_dump_json()}
         )
 
-        with Session(db_engine) as db_session:
-            patient = get_or_create_patient(
-                db_session, patient_first_name, patient_last_name
-            )
-            create_session(db_session, session_id, session_date, patient)
-            save_insights(db_session, session_id, insights)
-        logger.info("Saved insights to database", extra={"session_id": session_id})
+        upload_to_tables(
+            db_engine,
+            patient_first_name,
+            patient_last_name,
+            session_id,
+            session_date,
+            insights,
+        )
+        logger.info("Uploaded insights to database", extra={"session_id": session_id})
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
         event_data = {

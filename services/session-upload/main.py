@@ -19,7 +19,7 @@ from ddtrace import patch_all
 from fastapi import FastAPI, Form, UploadFile
 from fastapi.exceptions import HTTPException
 from minio import Minio
-from psychology_common import setup_logging
+from psychology_common.logging import setup_logging
 
 logger = setup_logging()
 patch_all()
