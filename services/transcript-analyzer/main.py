@@ -39,7 +39,21 @@ def get_transcript(minio_client: Minio, bucket_name: str, object_name: str):
         return data
 
 
-def call_llm(gemini_client: genai.Client, contents: str, system_prompt: str):
+def call_llm(
+    gemini_client: genai.Client,
+    redis_client: redis.Redis,
+    session_id: str,
+    contents: str,
+    system_prompt: str,
+):
+    cache_key = f"analysis:{session_id}"
+    if redis_client.exists(cache_key):
+        logger.info(
+            "LLM response successfully retrieved from cache",
+            extra={"cache_key": cache_key},
+        )
+        response = redis_client.get(cache_key)
+        return response
     response = gemini_client.models.generate_content(
         model="gemini-2.5-flash-lite",
         contents=contents,
@@ -132,7 +146,9 @@ def analyze_transcript(
         transcript = get_transcript(minio_client, bucket_name, file_name)
         with open("system.txt", "r", encoding="utf-8") as f:
             system_prompt = f.read()
-        response = call_llm(gemini_client, transcript, system_prompt)
+        response = call_llm(
+            gemini_client, redis_client, session_id, transcript, system_prompt
+        )
         analysis = TranscriptAnalysis.model_validate_json(response)
         logger.info(
             "Transcript model validated successfully",
