@@ -2,19 +2,10 @@ from datetime import date
 from typing import List, Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel
-from pydantic import Field as PydanticField
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import ARRAY, Float, Text
 from sqlmodel import Field, Relationship, SQLModel
-
-
-class PatientRelationship(BaseModel):
-    name: str
-    relationship: str
-    sentiment_score: float = PydanticField(ge=-1.0, le=1.0)
-    mentions: int
 
 
 class Patient(SQLModel, table=True):
@@ -46,7 +37,5 @@ class SessionInsights(SQLModel, table=True):
     sentiment_scores: List[float] = Field(
         sa_column=Column(ARRAY(Float), nullable=False)
     )
-    patient_relationships: List[PatientRelationship] = Field(
-        sa_column=Column(JSONB, nullable=False)
-    )
+    patient_relationships: List[dict] = Field(sa_column=Column(JSONB, nullable=False))
     session: Session = Relationship(back_populates="insights")

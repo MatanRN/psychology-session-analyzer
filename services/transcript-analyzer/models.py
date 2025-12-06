@@ -1,6 +1,5 @@
 from typing import List, Literal, Optional
 
-from psychology_common.db_models import PatientRelationship
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 from sqlmodel import Field
@@ -19,6 +18,13 @@ class Utterance(BaseModel):
 class SpeakerRoles(BaseModel):
     speaker_a: Literal["therapist", "patient"]
     speaker_b: Literal["therapist", "patient"]
+
+
+class PatientRelationship(BaseModel):
+    name: str
+    relationship: str
+    sentiment_score: float = PydanticField(ge=-1.0, le=1.0)
+    mentions: int
 
 
 class TranscriptAnalysis(BaseModel):
