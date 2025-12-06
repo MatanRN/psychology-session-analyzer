@@ -78,8 +78,6 @@ services:
         condition: service_started
       audio-extractor:
         condition: service_started
-      session-upload:
-        condition: service_started
   transcript-analyzer:
     build:
       context: .
@@ -113,6 +111,8 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+      audio-transcriber:
+        condition: service_started
   session-api:
     build:
       context: .
@@ -156,6 +156,7 @@ services:
   minio:
     image: minio/minio:latest
     container_name: minio
+    hostname: minio
     command: server /data --console-address ":9001"
     ports:
       - 9000:9000 # API port
@@ -165,6 +166,11 @@ services:
       - MINIO_PASSWORD=${MINIO_PASSWORD}
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://minio:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - analyzer-network
   redis:
