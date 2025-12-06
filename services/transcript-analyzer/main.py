@@ -68,7 +68,7 @@ def generate_insights(analysis: TranscriptAnalysis):
 
 
 def upload_to_tables(
-    db_engine: Engine,
+    db_engine,
     patient_first_name: str,
     patient_last_name: str,
     session_id: str,
@@ -81,7 +81,6 @@ def upload_to_tables(
         )
         create_session(db_session, session_id, session_date, patient)
         save_insights(db_session, session_id, insights)
-    logger.info("Uploaded insights to database", extra={"session_id": session_id})
 
 
 def analyze_transcript(
