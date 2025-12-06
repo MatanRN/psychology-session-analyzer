@@ -47,6 +47,6 @@ class SessionInsights(SQLModel, table=True):
         sa_column=Column(ARRAY(Float), nullable=False)
     )
     patient_relationships: List[PatientRelationship] = Field(
-        sa_column=Column(ARRAY(JSONB), nullable=False)
+        sa_column=Column(JSONB, nullable=False)
     )
     session: Session = Relationship(back_populates="insights")
