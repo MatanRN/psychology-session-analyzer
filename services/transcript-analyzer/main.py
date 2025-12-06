@@ -217,7 +217,11 @@ POSTGRES_DB = os.getenv("POSTGRES_DB")
 
 def main():
     credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
-    parameters = pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials)
+    parameters = pika.ConnectionParameters(
+        host=RABBITMQ_HOST,
+        credentials=credentials,
+        heartbeat=0,
+    )
     rabbit_connection = pika.BlockingConnection(parameters)
     rabbit_channel = rabbit_connection.channel()
     setup_rabbit_entities(rabbit_channel)

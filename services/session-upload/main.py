@@ -32,7 +32,11 @@ RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
 BUCKET_NAME = "sessions"
 EXCHANGE_NAME = "events"
 credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
-parameters = pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=credentials)
+parameters = pika.ConnectionParameters(
+    host=RABBITMQ_HOST,
+    credentials=credentials,
+    heartbeat=0,
+)
 rabbit_connection = pika.BlockingConnection(parameters)
 rabbit_channel = rabbit_connection.channel()
 rabbit_channel.exchange_declare(
