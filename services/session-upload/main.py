@@ -51,7 +51,7 @@ else:
     logger.info("Bucket already exists", extra={"bucket_name": BUCKET_NAME})
 
 
-@app.post("/session/upload")
+@app.post("/sessions/upload")
 def upload_session(
     file: UploadFile,
     date_of_session: str = Form(
