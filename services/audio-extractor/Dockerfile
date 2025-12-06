@@ -20,6 +20,7 @@ RUN sed -i 's|\${PROJECT_ROOT}/..|/app/services|g' pyproject.toml
 # Install common package explicitly
 RUN pip install .
 
+COPY services/audio-extractor/utils.py .
 COPY services/audio-extractor/main.py .
 
 ENTRYPOINT ["python", "main.py"]

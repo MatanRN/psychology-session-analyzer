@@ -20,40 +20,7 @@ from ddtrace import patch_all
 from minio import Minio
 from psychology_common.logging import setup_logging
 
-
-def setup_rabbit_entities(channel):
-    """
-    Sets up the RabbitMQ entities for the audio extraction service.
-    """
-    channel.exchange_declare(
-        exchange="dead_letter_exchange", exchange_type="direct", durable=True
-    )
-    channel.queue_declare(queue="dlq_audio_extraction", durable=True)
-    channel.queue_bind(
-        queue="dlq_audio_extraction",
-        exchange="dead_letter_exchange",
-        routing_key="audio.extraction.failed",
-    )
-    # Ensure exchanges exists - idempotent
-    channel.exchange_declare(
-        exchange=EXCHANGE_NAME, exchange_type="topic", durable=True
-    )
-    args = {
-        "x-queue-type": "quorum",
-        "x-delivery-limit": MAX_DELIVERY_COUNT,
-        "x-dead-letter-exchange": "dead_letter_exchange",
-        "x-dead-letter-routing-key": "audio.extraction.failed",
-    }
-    # Ensure queue exists - idempotent
-    channel.queue_declare(queue="audio_extraction_queue", durable=True, arguments=args)
-    # Bind queue to exchange with routing key - idempotent
-
-    channel.queue_bind(
-        queue="audio_extraction_queue",
-        exchange=EXCHANGE_NAME,
-        routing_key="video.upload.completed",
-    )
-
+from utils import BUCKET_NAME, EXCHANGE_NAME, MAX_DELIVERY_COUNT, setup_rabbit_entities
 
 # Service setup and configuration
 patch_all()
@@ -64,9 +31,7 @@ MINIO_PASSWORD = os.getenv("MINIO_PASSWORD")
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
 RABBITMQ_USER = os.getenv("RABBITMQ_USER")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD")
-BUCKET_NAME = "sessions"
-EXCHANGE_NAME = "events"
-MAX_DELIVERY_COUNT = 3
+
 minio_client = Minio(
     endpoint=MINIO_ENDPOINT,
     access_key=MINIO_USER,
@@ -102,14 +67,12 @@ def process_video(ch, method, properties, body):
             object_name=file_name,
         ) as response:
             data = response.data
-    except Exception:
-        logger.exception(
-            "MinIO Object Retrieval Failed",
+
+        logger.info(
+            "Video file successfully retrieved from MinIO",
             extra={"file_name": file_name, "bucket_name": bucket_name},
         )
-        ch.basic_nack(delivery_tag=method.delivery_tag)
-        return
-    try:
+
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_file_name = os.path.basename(file_name)
             temp_file_path = os.path.join(temp_dir, temp_file_name)
@@ -168,12 +131,13 @@ def process_video(ch, method, properties, body):
                 "routing_key": "audio.extraction.completed",
             },
         )
-    except Exception:
+    except Exception as e:
         logger.exception(
-            "Audio Extraction Failed. Retrying...",
-            extra={"file_name": audio_object_name, "bucket_name": bucket_name},
+            "Audio Extraction Failed.",
+            extra={"error": e},
         )
         ch.basic_nack(delivery_tag=method.delivery_tag)
+        return
 
 
 def main():
@@ -185,6 +149,7 @@ def main():
     rabbit_channel.basic_consume(
         queue="audio_extraction_queue", on_message_callback=process_video
     )
+    logger.info("Service successfully initialized. Message consumption started.")
     rabbit_channel.start_consuming()
 
 
