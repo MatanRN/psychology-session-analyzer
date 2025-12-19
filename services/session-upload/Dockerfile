@@ -17,7 +17,7 @@ RUN sed -i 's|\${PROJECT_ROOT}/..|/app/services|g' pyproject.toml
 # Install the service (will automatically install common from the path)
 RUN pip install .
 
-COPY services/session-upload/main.py .
+COPY services/session-upload/ .
 
 EXPOSE 8000
 
