@@ -17,8 +17,14 @@ RUN sed -i 's|\${PROJECT_ROOT}/..|/app/services|g' pyproject.toml
 # Install the service (will automatically install common from the path)
 RUN pip install .
 
-COPY services/session-api/response_models.py .
+# Copy application code
 COPY services/session-api/main.py .
+COPY services/session-api/config.py .
+COPY services/session-api/dependencies.py .
+COPY services/session-api/exceptions.py .
+COPY services/session-api/response_models.py .
+COPY services/session-api/routes/ ./routes/
+COPY services/session-api/repositories/ ./repositories/
 
 EXPOSE 8080
 
