@@ -5,7 +5,7 @@ import io
 from minio import Minio
 from psychology_common.logging import setup_logging
 
-from domain.exceptions import StorageDownloadError, StorageUploadError
+from exceptions import StorageDownloadError, StorageUploadError
 
 from .interfaces import StorageClient
 

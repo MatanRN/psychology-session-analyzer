@@ -8,7 +8,7 @@ from pika.adapters.blocking_connection import BlockingChannel
 from psychology_common.logging import setup_logging
 
 from config import RabbitMQConfig
-from domain.exceptions import EventPublishError
+from exceptions import EventPublishError
 
 from .interfaces import MessageBroker
 
