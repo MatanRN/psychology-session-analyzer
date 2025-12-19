@@ -5,7 +5,9 @@ from psychology_common.db_models import SessionInsights
 from pydantic import BaseModel
 
 
-class SessionListItem(BaseModel):
+class SessionWithPatient(BaseModel):
+    """Session data combined with patient information."""
+
     session_id: UUID
     patient_first_name: str
     patient_last_name: str
@@ -13,6 +15,8 @@ class SessionListItem(BaseModel):
 
 
 class SessionDetailResponse(BaseModel):
+    """Full session details including analysis insights."""
+
     session_id: UUID
     patient_first_name: str
     patient_last_name: str
