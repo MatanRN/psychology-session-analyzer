@@ -7,7 +7,7 @@ import pika
 import redis
 from google import genai
 from minio import Minio
-from psychology_common.logging import setup_logging
+from psychology_common import setup_logging
 from sqlmodel import Session, SQLModel, create_engine
 
 from config import load_config
@@ -86,7 +86,7 @@ _parameters = pika.ConnectionParameters(
 _rabbit_connection = pika.BlockingConnection(_parameters)
 _rabbit_channel = _rabbit_connection.channel()
 _broker = RabbitMQBroker(_rabbit_channel, _config.rabbitmq)
-_broker.setup_queue_infrastructure()
+_broker.setup()
 
 # Service composition
 _analyzer = TranscriptAnalyzer(_llm, _cache)

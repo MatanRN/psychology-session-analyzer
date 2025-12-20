@@ -3,9 +3,8 @@
 from datetime import date
 from uuid import UUID
 
-from psychology_common.db_models import Patient, SessionInsights
-from psychology_common.db_models import Session as SessionEntity
-from psychology_common.logging import setup_logging
+from psychology_common import Patient, Session, SessionInsights, setup_logging
+from psychology_common import Session as SessionEntity
 from sqlmodel import Session, select
 
 from domain.models import Insights, SessionMetadata

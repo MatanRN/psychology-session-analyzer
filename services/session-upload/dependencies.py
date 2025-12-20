@@ -2,11 +2,11 @@
 
 import pika
 from minio import Minio
-from psychology_common.logging import setup_logging
+from psychology_common import setup_logging
+from psychology_common.infrastructure import MessagePublisher, StorageClient
 
 from config import load_config
 from infrastructure import MinioStorage, RabbitMQPublisher
-from interfaces import EventPublisher, StorageClient
 
 logger = setup_logging()
 
@@ -43,6 +43,6 @@ def get_storage() -> StorageClient:
     return MinioStorage(_minio_client, _config.minio.bucket_name)
 
 
-def get_publisher() -> EventPublisher:
+def get_publisher() -> MessagePublisher:
     """Returns the configured event publisher."""
     return RabbitMQPublisher(_rabbit_channel, _config.rabbitmq.exchange_name)

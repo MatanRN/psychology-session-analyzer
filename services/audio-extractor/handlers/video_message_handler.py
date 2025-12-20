@@ -1,9 +1,11 @@
 """Handler for processing video files."""
 
-from psychology_common.logging import setup_logging
+import io
+
+from psychology_common import setup_logging
+from psychology_common.infrastructure import StorageClient
 
 from domain import AudioExtractionResult, AudioExtractor, VideoMessage
-from infrastructure.interfaces import StorageClient
 
 logger = setup_logging()
 
@@ -49,7 +51,8 @@ class VideoMessageHandler:
         self._storage.upload(
             bucket_name=result.bucket_name,
             object_name=result.audio_object_name,
-            data=audio_bytes,
+            data=io.BytesIO(audio_bytes),
+            size=len(audio_bytes),
             content_type=result.content_type,
         )
 

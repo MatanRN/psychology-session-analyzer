@@ -3,13 +3,13 @@
 import json
 from typing import Any
 
-from psychology_common.logging import setup_logging
+from psychology_common import setup_logging
+from psychology_common.infrastructure import MessageBroker
 from pydantic import ValidationError
 
 from config import RabbitMQConfig
 from domain import TranscriptMessage
 from handlers import TranscriptMessageHandler
-from infrastructure.interfaces import MessageBroker
 
 logger = setup_logging()
 

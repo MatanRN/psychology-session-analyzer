@@ -1,6 +1,7 @@
 """Handler for processing transcript messages."""
 
-from psychology_common.logging import setup_logging
+from psychology_common import setup_logging
+from psychology_common.infrastructure import StorageClient
 
 from domain import (
     AnalysisResult,
@@ -8,7 +9,6 @@ from domain import (
     TranscriptAnalyzer,
     TranscriptMessage,
 )
-from infrastructure.interfaces import StorageClient
 from repositories import SessionRepository
 
 logger = setup_logging()
@@ -50,7 +50,10 @@ class TranscriptMessageHandler:
 
         metadata = SessionMetadata.from_file_path(message.file_name)
 
-        transcript = self._storage.download_text(message.bucket_name, message.file_name)
+        transcript_bytes = self._storage.download(
+            message.bucket_name, message.file_name
+        )
+        transcript = transcript_bytes.decode("utf-8")
 
         analysis = self._analyzer.analyze(transcript, metadata.session_id)
 

@@ -2,13 +2,13 @@
 
 import pika
 from minio import Minio
-from psychology_common.logging import setup_logging
+from psychology_common import setup_logging
+from psychology_common.infrastructure import MessageBroker, StorageClient
 
 from config import load_config
 from domain import AudioExtractor
 from handlers import VideoMessageHandler
 from infrastructure import MinioStorageClient, RabbitMQBroker
-from infrastructure.interfaces import MessageBroker, StorageClient
 from worker import Worker
 
 logger = setup_logging()
@@ -35,7 +35,7 @@ _rabbit_connection = pika.BlockingConnection(_parameters)
 _rabbit_channel = _rabbit_connection.channel()
 
 _broker = RabbitMQBroker(_rabbit_channel, _config.rabbitmq)
-_broker.setup_queue_infrastructure()
+_broker.setup()
 
 
 def get_storage() -> StorageClient:

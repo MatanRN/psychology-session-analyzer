@@ -1,17 +1,15 @@
-"""RabbitMQ implementation of the EventPublisher interface."""
+"""RabbitMQ implementation of the MessagePublisher interface."""
 
 import json
 
 from pika.adapters.blocking_connection import BlockingChannel
-from psychology_common.logging import setup_logging
-
-from exceptions import EventPublishError
-from interfaces import EventPublisher
+from psychology_common import EventPublishError, setup_logging
+from psychology_common.infrastructure import MessagePublisher
 
 logger = setup_logging()
 
 
-class RabbitMQPublisher(EventPublisher):
+class RabbitMQPublisher(MessagePublisher):
     """Publishes events to a RabbitMQ exchange."""
 
     def __init__(self, channel: BlockingChannel, exchange_name: str):

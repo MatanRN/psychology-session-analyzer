@@ -3,12 +3,11 @@
 import tempfile
 
 import assemblyai as aai
-from psychology_common.logging import setup_logging
+from psychology_common import setup_logging
 
 from domain.models import Utterance
 from exceptions import TranscriptionError
-
-from .interfaces import TranscriptionService
+from infrastructure.interfaces import TranscriptionService
 
 logger = setup_logging()
 

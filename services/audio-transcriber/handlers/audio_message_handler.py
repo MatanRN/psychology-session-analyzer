@@ -1,9 +1,12 @@
 """Handler for processing audio files."""
 
-from psychology_common.logging import setup_logging
+import io
+
+from psychology_common import setup_logging
+from psychology_common.infrastructure import StorageClient
 
 from domain import AudioMessage, TranscriptBuilder, TranscriptionResult
-from infrastructure.interfaces import StorageClient, TranscriptionService
+from infrastructure.interfaces import TranscriptionService
 
 logger = setup_logging()
 
@@ -54,10 +57,12 @@ class AudioMessageHandler:
             bucket_name=message.bucket_name,
         )
 
+        transcript_bytes = transcript_text.encode("utf-8")
         self._storage.upload(
             bucket_name=result.bucket_name,
             object_name=result.transcription_object_name,
-            data=transcript_text.encode("utf-8"),
+            data=io.BytesIO(transcript_bytes),
+            size=len(transcript_bytes),
             content_type=result.content_type,
         )
 

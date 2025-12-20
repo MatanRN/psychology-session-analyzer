@@ -1,7 +1,7 @@
 """Redis cache service implementation."""
 
 import redis
-from psychology_common.logging import setup_logging
+from psychology_common import setup_logging
 
 from exceptions import CacheServiceError
 from infrastructure.interfaces import CacheService

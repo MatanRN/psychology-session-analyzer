@@ -1,13 +1,10 @@
 """MinIO implementation of the StorageClient interface."""
 
-import io
+from typing import BinaryIO
 
 from minio import Minio
-from psychology_common.logging import setup_logging
-
-from exceptions import StorageDownloadError, StorageUploadError
-
-from .interfaces import StorageClient
+from psychology_common import StorageDownloadError, StorageUploadError, setup_logging
+from psychology_common.infrastructure import StorageClient
 
 logger = setup_logging()
 
@@ -40,15 +37,16 @@ class MinioStorageClient(StorageClient):
         self,
         bucket_name: str,
         object_name: str,
-        data: bytes,
+        data: BinaryIO,
+        size: int,
         content_type: str,
     ) -> None:
         try:
             self._client.put_object(
                 bucket_name=bucket_name,
                 object_name=object_name,
-                data=io.BytesIO(data),
-                length=len(data),
+                data=data,
+                length=size,
                 content_type=content_type,
             )
             logger.info(
@@ -56,7 +54,6 @@ class MinioStorageClient(StorageClient):
                 extra={
                     "bucket_name": bucket_name,
                     "object_name": object_name,
-                    "size": len(data),
                 },
             )
         except Exception as e:

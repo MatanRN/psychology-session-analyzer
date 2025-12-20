@@ -5,11 +5,10 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
-from psychology_common.logging import setup_logging
+from psychology_common import EventPublishError, StorageUploadError, setup_logging
+from psychology_common.infrastructure import MessagePublisher, StorageClient
 
 from dependencies import get_publisher, get_storage
-from exceptions import EventPublishError, StorageUploadError
-from interfaces import EventPublisher, StorageClient
 from response_models import UploadResponse
 
 logger = setup_logging()
@@ -17,7 +16,7 @@ logger = setup_logging()
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 StorageDep = Annotated[StorageClient, Depends(get_storage)]
-PublisherDep = Annotated[EventPublisher, Depends(get_publisher)]
+PublisherDep = Annotated[MessagePublisher, Depends(get_publisher)]
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -62,7 +61,8 @@ def upload_session(
     )
 
     try:
-        storage.upload_file(
+        storage.upload(
+            bucket_name="sessions",
             object_name=object_name,
             data=file.file,
             size=file.size,

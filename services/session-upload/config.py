@@ -2,20 +2,12 @@
 
 import os
 
+from psychology_common import MinioConfig
 from pydantic import BaseModel
 
 
-class MinioConfig(BaseModel, frozen=True):
-    """Immutable MinIO connection configuration."""
-
-    endpoint: str
-    user: str
-    password: str
-    bucket_name: str = "sessions"
-
-
-class RabbitMQConfig(BaseModel, frozen=True):
-    """Immutable RabbitMQ connection configuration."""
+class RabbitMQPublisherConfig(BaseModel, frozen=True):
+    """RabbitMQ publisher configuration (no queue config needed)."""
 
     host: str
     user: str
@@ -27,7 +19,7 @@ class AppConfig(BaseModel, frozen=True):
     """Root application configuration."""
 
     minio: MinioConfig
-    rabbitmq: RabbitMQConfig
+    rabbitmq: RabbitMQPublisherConfig
 
 
 def load_config() -> AppConfig:
@@ -38,7 +30,7 @@ def load_config() -> AppConfig:
             user=os.getenv("MINIO_USER", ""),
             password=os.getenv("MINIO_PASSWORD", ""),
         ),
-        rabbitmq=RabbitMQConfig(
+        rabbitmq=RabbitMQPublisherConfig(
             host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
             user=os.getenv("RABBITMQ_USER", ""),
             password=os.getenv("RABBITMQ_PASSWORD", ""),

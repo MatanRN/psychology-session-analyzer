@@ -5,11 +5,13 @@ from collections.abc import Callable
 from typing import Any
 
 from pika.channel import Channel
-from psychology_common.logging import setup_logging
-
-from config import RabbitMQConfig
-from exceptions import EventPublishError
-from infrastructure.interfaces import MessageBroker
+from psychology_common import (
+    EventPublishError,
+    QueueConfig,
+    RabbitMQConfig,
+    setup_logging,
+)
+from psychology_common.infrastructure import MessageBroker
 
 logger = setup_logging()
 
@@ -83,9 +85,9 @@ class RabbitMQBroker(MessageBroker):
         )
         self._channel.start_consuming()
 
-    def setup_queue_infrastructure(self) -> None:
+    def setup(self) -> None:
         """Sets up exchanges, queues, and bindings for this service."""
-        queue_config = self._config.queue_config
+        queue_config: QueueConfig = self._config.queue_config
 
         # Dead letter exchange and queue
         self._channel.exchange_declare(
