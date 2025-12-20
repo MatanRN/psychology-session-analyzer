@@ -48,6 +48,11 @@ _cache = RedisCacheService(_redis_client, _config.redis.cache_ttl_seconds)
 
 # Gemini LLM
 _gemini_client = genai.Client(api_key=_config.gemini.api_key)
+try:
+    _gemini_client.models.get(model=_config.gemini.model_name)
+except Exception as e:
+    logger.error("Gemini Connection Failed", extra={"error": str(e)})
+    raise ConnectionError(f"Gemini Connection Failed: {e}") from e
 _system_prompt_path = Path(__file__).parent / _config.gemini.system_prompt_path
 _system_prompt = _system_prompt_path.read_text(encoding="utf-8")
 _llm = GeminiLLMService(_gemini_client, _config.gemini.model_name, _system_prompt)
