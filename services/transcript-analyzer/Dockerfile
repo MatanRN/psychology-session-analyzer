@@ -18,10 +18,14 @@ RUN sed -i 's|\${PROJECT_ROOT}/..|/app/services|g' pyproject.toml
 RUN pip install .
 
 COPY services/transcript-analyzer/system.txt .
-COPY services/transcript-analyzer/models.py .
 COPY services/transcript-analyzer/main.py .
-COPY services/transcript-analyzer/utils.py .
-COPY services/transcript-analyzer/analysis.py .
-COPY services/transcript-analyzer/database.py .
+COPY services/transcript-analyzer/domain domain/
+COPY services/transcript-analyzer/infrastructure infrastructure/
+COPY services/transcript-analyzer/handlers handlers/
+COPY services/transcript-analyzer/repositories repositories/
+COPY services/transcript-analyzer/worker.py .
+COPY services/transcript-analyzer/dependencies.py .
+COPY services/transcript-analyzer/exceptions.py .
+COPY services/transcript-analyzer/config.py .
 
 ENTRYPOINT ["python", "main.py"]
